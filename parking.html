@@ -1,0 +1,1385 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>TymY 주차 연습장</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+<script>
+// 화면 테마: 저장된 선택(주간/야간) 또는 시스템 설정. 첫 페인트 전에 적용해 깜빡임 방지
+(function(){ var t = 'auto'; try { t = (JSON.parse(localStorage.getItem('parkOpt')||'{}').theme) || 'auto'; } catch(e){}
+  var dark = t === 'night' || (t !== 'day' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light'); })();
+</script>
+<style>
+/* 테슬라 콘솔 스타일: 주간(밝은 회색) / 야간(검정) 두 벌의 토큰. 강조색 = 테슬라 블루 */
+:root{
+  --bg:#eeeeee; --panel:#ffffff; --ink:#171a20; --muted:#5c5e62; --line:#e2e3e4; --soft:#f4f4f4; --soft2:#e6e7e8;
+  --accent:#3e6ae1; --accent-ink:#ffffff; --ok:#12a150; --warn:#e8890c; --bad:#e82127;
+  --stage:#d6d8da; --shadow:0 1px 3px rgba(0,0,0,.08),0 4px 14px rgba(0,0,0,.05);
+  --font:'Inter','Noto Sans KR',-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  --mono:'Inter','Noto Sans KR',-apple-system,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#000000; --panel:#1c1c1e; --ink:#f2f2f2; --muted:#8e8e93; --line:#2c2c2e; --soft:#2a2a2c; --soft2:#3a3a3c;
+  --accent:#3e6ae1; --accent-ink:#ffffff; --ok:#30c46c; --warn:#f2a33a; --bad:#ff3b30; --stage:#0a0a0b; --shadow:none; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#000000; --panel:#1c1c1e; --ink:#f2f2f2; --muted:#8e8e93; --line:#2c2c2e; --soft:#2a2a2c; --soft2:#3a3a3c;
+  --accent:#3e6ae1; --accent-ink:#ffffff; --ok:#30c46c; --warn:#f2a33a; --bad:#ff3b30; --stage:#0a0a0b; --shadow:none; color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased;
+  transition:background-color .3s,color .3s;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:max(14px,env(safe-area-inset-top,0px));padding-bottom:max(40px,env(safe-area-inset-bottom,0px))}
+img{max-width:100%}
+[hidden]{display:none!important}
+.app{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 16px}
+h1{margin:0;font-size:22px;font-weight:600;letter-spacing:-.01em;text-wrap:balance}
+h1 small{display:block;font-size:12px;font-weight:500;color:var(--muted);letter-spacing:.02em}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;background:var(--soft2);border-radius:10px;padding:3px}
+.seg button{border:0;background:transparent;color:var(--muted);font:500 13px var(--font);padding:7px 13px;border-radius:8px;cursor:pointer;transition:background-color .15s,color .15s}
+.seg button[aria-pressed="true"]{background:var(--panel);color:var(--ink);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+select,.btn{font:500 13px var(--font);color:var(--ink);background:var(--panel);border:0;border-radius:8px;padding:8px 11px;cursor:pointer;box-shadow:var(--shadow);outline:1px solid var(--line);outline-offset:-1px}
+.btn:hover,select:hover{outline-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);outline:0}
+:focus-visible{outline:2px solid var(--accent)!important;outline-offset:2px!important}
+
+.stage{position:relative;width:100%;background:var(--stage);border-radius:14px;overflow:hidden;line-height:0}
+.stage canvas{display:block;width:100%;touch-action:pan-y}
+.look{position:absolute;transform:translateX(-50%);pointer-events:none;font:500 11px/1 var(--font);color:#f2f2f2;background:rgba(0,0,0,.5);padding:6px 10px;border-radius:14px;transition:opacity .3s;backdrop-filter:blur(6px)}
+.frame{position:absolute;pointer-events:none;border:3px solid #0d0e10;box-shadow:0 0 0 1px rgba(255,255,255,.14),0 4px 12px rgba(0,0,0,.4)}
+.frame.side{border-radius:14px 14px 22px 22px}
+.frame.rear{border-radius:10px}
+.frame.av{border:0;box-shadow:none}
+.cam{position:absolute;pointer-events:none;border-radius:8px;opacity:0;transition:opacity .3s;mix-blend-mode:screen}
+:root[data-theme="dark"] .cam{opacity:.35}
+.tag{position:absolute;pointer-events:none;font:600 11px/1 var(--font);color:#f2f2f2;background:rgba(0,0,0,.5);padding:5px 8px;border-radius:6px;letter-spacing:.02em;backdrop-filter:blur(6px)}
+.tag.light{color:#171a20;background:rgba(255,255,255,.7)}
+.toast{position:absolute;left:50%;transform:translate(-50%,-6px);max-width:88%;pointer-events:none;
+  font:500 13px/1.4 var(--font);color:var(--ink);background:var(--panel);padding:10px 16px;border-radius:12px;text-align:center;opacity:0;
+  box-shadow:0 6px 24px rgba(0,0,0,.28);transition:opacity .2s,transform .2s;display:flex;align-items:center;gap:8px}
+.toast::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.warn::before{background:var(--warn)} .toast.bad::before{background:var(--bad)} .toast.ok::before{background:var(--ok)}
+.result{position:absolute;line-height:1.5;background:var(--panel);color:var(--ink);border-radius:16px;padding:18px 20px;width:min(330px,86%);
+  box-shadow:0 14px 40px rgba(0,0,0,.45);display:flex;flex-direction:column;gap:10px}
+.result h3{margin:0;font-size:19px;font-weight:600;text-wrap:balance}
+.result h3 .why{font-size:13px;font-weight:500}
+.result .v-ok{color:var(--ok)} .result .v-warn{color:var(--warn)} .result .v-bad{color:var(--bad)}
+.result dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px}
+.result dt{color:var(--muted)} .result dd{margin:0;font-variant-numeric:tabular-nums;text-align:right;font-weight:500}
+.result .row{display:flex;gap:8px;justify-content:flex-end;margin-top:4px}
+.result .row .btn{flex:1;padding:10px;box-shadow:none;background:var(--soft2);outline:0}
+.result .row .btn.primary{background:var(--accent)}
+.avlbl{position:absolute;pointer-events:none;transform:translate(-50%,-50%);font:600 22px/1 var(--font);color:#f3f3f3;text-shadow:0 1px 6px rgba(0,0,0,.8)}
+.flash{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 6px var(--bad);opacity:0;transition:opacity .25s}
+.flash.on{opacity:1}
+
+/* 계기: 왼쪽 큰 속도 + P R N D, 나머지 보조 지표 */
+.hud{display:flex;flex-wrap:wrap;gap:6px;align-items:stretch}
+.drive{display:flex;align-items:center;gap:16px;background:var(--panel);border-radius:12px;padding:6px 16px;box-shadow:var(--shadow)}
+.prnd{display:flex;gap:9px;font:600 15px/1 var(--font)}
+.prnd span{color:var(--muted);opacity:.45;transition:opacity .15s,color .15s}
+.prnd span.on{color:var(--ink);opacity:1}
+.spd{display:flex;flex-direction:column;align-items:center;line-height:1}
+.spd b{font:600 30px/1 var(--font);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.spd span{font-size:10px;color:var(--muted);margin-top:3px;letter-spacing:.04em}
+.stat{background:var(--panel);border-radius:12px;padding:7px 12px;display:flex;flex-direction:column;justify-content:center;min-width:78px;box-shadow:var(--shadow)}
+.stat span{font-size:11px;color:var(--muted)}
+.stat b{font:600 16px/1.3 var(--font);font-variant-numeric:tabular-nums}
+.c-ok{color:var(--ok)} .c-warn{color:var(--warn)} .c-bad{color:var(--bad)}
+
+.controls{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;background:var(--panel);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
+.wheelbox{display:flex;flex-direction:column;align-items:center;gap:8px}
+#wheel{width:150px;height:150px;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;color:var(--ink)}
+#wheel:active{cursor:grabbing}
+.quick{display:flex;gap:4px;background:var(--soft2);border-radius:9px;padding:3px}
+.quick button{font:500 12px var(--font);padding:5px 9px;border-radius:7px;border:0;background:transparent;color:var(--ink);cursor:pointer}
+.quick button:hover{background:var(--panel)}
+.readout{font:500 12px var(--font);color:var(--muted);font-variant-numeric:tabular-nums}
+.right{display:flex;flex-direction:column;gap:10px;min-width:0}
+.gears{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:var(--soft2);border-radius:12px;padding:4px}
+.gears button{font:600 18px var(--font);padding:9px 0;border-radius:9px;border:0;background:transparent;color:var(--muted);cursor:pointer;transition:background-color .15s,color .15s}
+.gears button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.pedals{display:grid;grid-template-columns:1fr 1.3fr;gap:8px}
+.pedal{height:78px;border-radius:12px;border:0;background:var(--soft2);color:var(--ink);font:600 15px var(--font);cursor:pointer;
+  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transition:background-color .1s}
+.pedal small{font-weight:400;font-size:11px;color:var(--muted)}
+.pedal.brake.on{background:var(--bad);color:#fff}
+.pedal.acc.on{background:var(--accent);color:var(--accent-ink)}
+.pedal.on small{color:inherit}
+.keys{font-size:12px;color:var(--muted)}
+.toggles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.tgl{font:500 13px var(--font);padding:10px 0;border-radius:10px;border:0;background:var(--soft2);color:var(--ink);cursor:pointer;transition:background-color .15s,color .15s}
+.tgl[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.tgl.haz{color:var(--bad)}
+.tgl.haz[aria-pressed="true"]{background:var(--bad);color:#fff;animation:haz 1s steps(1) infinite}
+@keyframes haz{50%{background:var(--soft2);color:var(--bad)}}
+@media (prefers-reduced-motion:reduce){.tgl.haz[aria-pressed="true"]{animation:none}}
+
+.opts{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;background:var(--panel);border-radius:14px;padding:12px 16px;box-shadow:var(--shadow)}
+.opts label{display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px}
+.opts input{accent-color:var(--accent);width:17px;height:17px}
+.opts select{box-shadow:none;background:var(--soft2);outline:0;padding:6px 9px}
+.opts .themeopt{display:flex;align-items:center;gap:8px;font-size:13px;margin-left:auto}
+.opts .themeopt .seg button{padding:5px 12px;font-size:12px}
+
+.guide{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:12px}
+.card{background:var(--panel);border-radius:14px;padding:16px 18px;min-width:0;box-shadow:var(--shadow)}
+.card h2{margin:0 0 10px;font-size:15px;font-weight:600}
+.card ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:7px}
+.card li b{font-weight:600}
+.disc{font-size:12px;color:var(--muted);text-align:center;padding-block:6px 0}
+.note{margin:10px 0 0;font-size:13px;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td{padding:6px 0;border-bottom:1px solid var(--line)} td:last-child{text-align:right;font-variant-numeric:tabular-nums;font-weight:500}
+tr:last-child td{border-bottom:0}
+/* 모바일: 데스크탑과 같은 구도(핸들 왼쪽 | 기어·페달·버튼 오른쪽), 조작부는 손가락 크기로 크게 */
+@media (max-width:720px){
+  .controls{grid-template-columns:auto minmax(0,1fr);gap:10px;padding:10px;align-items:start}
+  .wheelbox{flex-direction:column;align-items:center;gap:6px}
+  .wheelbox .side{display:flex;flex-direction:column;gap:4px;align-items:center}
+  #wheel{width:118px;height:118px}
+  .quick button{font-size:12px;padding:8px 7px}
+  .quick .lg{display:none}
+  .right{gap:8px}
+  .gears button{font-size:20px;padding:12px 0}
+  .pedals{gap:6px;grid-template-columns:1fr 1fr}
+  .pedal{height:104px;font-size:16px;border-radius:14px;white-space:nowrap}
+  .pedal small{display:none}
+  .tgl{padding:13px 0;font-size:12px;white-space:nowrap;letter-spacing:-.02em}
+  .keys{display:none}
+  .hud{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+  .drive{grid-column:span 2;justify-content:space-between;padding:6px 12px;gap:8px}
+  .prnd{gap:7px;font-size:14px}
+  .spd b{font-size:26px}
+  .stat{min-width:0;padding:5px 9px}
+  .stat b{font-size:13px;white-space:nowrap}
+  .stat span{white-space:nowrap}
+  .opts{gap:8px 12px;padding:10px 12px}
+  .opts label{font-size:12px}
+  .opts .themeopt{margin-left:0;width:100%;justify-content:space-between}
+  .guide{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){.toast,.flash,body{transition:none}}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <h1>주차 연습장<small>TymY 치수·회전반경 기준 시뮬레이션</small></h1>
+    <div class="bar">
+      <div class="seg" role="group" aria-label="연습 종류">
+        <button id="sc-t" aria-pressed="true">T형 주차</button>
+        <button id="sc-par" aria-pressed="false">평행주차</button>
+      </div>
+      <select id="diff" aria-label="난이도"></select>
+      <select id="carSel" aria-label="차종">
+        <option value="my">TymY</option>
+        <option value="cmp">비교: 준중형 세단</option>
+      </select>
+      <button class="btn" id="reset">다시 시작</button>
+    </div>
+  </header>
+
+  <div class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <div class="frame rear" id="fRear"></div>
+    <div class="frame side" id="fLeft"></div>
+    <div class="frame side" id="fRight"></div>
+    <div class="frame av" id="fAv"></div>
+    <div class="tag" id="tAv">어라운드 뷰</div>
+    <div class="avlbl" id="avLbl" hidden></div>
+    <div class="look" id="tLook">◀ 좌우로 끌어 옆 보기 ▶</div>
+    <div class="cam" id="gCl"></div><div class="cam" id="gCr"></div><div class="cam" id="gCb"></div>
+    <div class="tag" id="tCl" hidden>왼쪽</div>
+    <div class="tag" id="tCr" hidden>오른쪽</div>
+    <div class="tag" id="tCb" hidden>후면</div>
+    <div class="flash" id="flash"></div>
+    <div class="toast" id="toast"></div>
+    <div class="result" id="result" hidden></div>
+  </div>
+
+  <div class="controls">
+    <div class="wheelbox">
+      <svg id="wheel" viewBox="-100 -100 200 200" aria-label="핸들 (드래그하여 돌리기)" role="slider" tabindex="0">
+        <g id="wheelG">
+          <circle r="88" fill="none" stroke="currentColor" stroke-width="16" opacity=".9"/>
+          <circle r="22" fill="currentColor" opacity=".85"/>
+          <rect x="-82" y="-6" width="164" height="12" rx="6" fill="currentColor" opacity=".75"/>
+          <rect x="-6" y="0" width="12" height="82" rx="6" fill="currentColor" opacity=".75"/>
+          <rect x="-7" y="-97" width="14" height="18" rx="3" fill="var(--accent)"/>
+        </g>
+      </svg>
+      <div class="side">
+        <div class="quick">
+          <button data-steer="-1">◀<span class="lg"> 왼쪽</span> 끝</button>
+          <button data-steer="0">중앙</button>
+          <button data-steer="1"><span class="lg">오른쪽 </span>끝 ▶</button>
+        </div>
+        <div class="readout" id="steerRd">중앙 0%</div>
+      </div>
+    </div>
+    <div class="right">
+      <div class="gears" role="group" aria-label="기어">
+        <button data-g="P" aria-pressed="true">P</button>
+        <button data-g="R" aria-pressed="false">R</button>
+        <button data-g="N" aria-pressed="false">N</button>
+        <button data-g="D" aria-pressed="false">D</button>
+      </div>
+      <div class="pedals">
+        <button class="pedal brake" id="pBrake">브레이크<small>누르고 있기</small></button>
+        <button class="pedal acc" id="pAcc">엑셀<small>누르는 동안 천천히 이동</small></button>
+      </div>
+      <div class="toggles">
+        <button class="tgl" id="bCam" aria-pressed="false">카메라</button>
+        <button class="tgl" id="bFold" aria-pressed="false">미러 접기</button>
+        <button class="tgl haz" id="bHaz" aria-pressed="false">▲ 비상등</button>
+      </div>
+      <div class="keys">키보드: ← → 핸들 · ↑ 엑셀 · ↓/Space 브레이크 · P R N D 기어 · 엑셀을 떼면 원페달 감속으로 정지</div>
+    </div>
+  </div>
+
+  <div class="hud" id="hud">
+    <div class="drive" aria-label="기어·속도">
+      <div class="prnd" id="hGear"><span data-g="P" class="on">P</span><span data-g="R">R</span><span data-g="N">N</span><span data-g="D">D</span></div>
+      <div class="spd"><b id="hSpd">0</b><span>km/h</span></div>
+    </div>
+    <div class="stat"><span>바퀴 각도</span><b id="hAng">0°</b></div>
+    <div class="stat" id="sNear" hidden><span>근접 장애물</span><b id="hNear">-</b></div>
+    <div class="stat" id="sCurb"><span>연석까지</span><b id="hCurb">-</b></div>
+    <div class="stat"><span>접촉</span><b id="hHit">0</b></div>
+    <div class="stat"><span>전후진 전환</span><b id="hShift">0</b></div>
+    <div class="stat"><span>시간</span><b id="hTime">0:00</b></div>
+  </div>
+
+  <div class="opts">
+    <label><input type="checkbox" id="oAv"> 어라운드 뷰</label>
+    <label><input type="checkbox" id="oReal"> 어라운드 뷰 실제 화면</label>
+    <label><input type="checkbox" id="oGuide"> 예상 궤적</label>
+    <label><input type="checkbox" id="oTilt"> 후진 시 사이드미러 하향</label>
+    <label><input type="checkbox" id="oBig"> 미러 크게</label>
+    <label><input type="checkbox" id="oDist"> 거리 지표 표시</label>
+    <label>교통량 <select id="oTraffic" aria-label="교통량"><option value="0">없음</option><option value="1">보통</option><option value="2">많음</option></select></label>
+    <div class="themeopt"><span>화면</span>
+      <div class="seg" role="group" aria-label="화면 모드">
+        <button data-theme-opt="auto" aria-pressed="true">자동</button>
+        <button data-theme-opt="day" aria-pressed="false">주간</button>
+        <button data-theme-opt="night" aria-pressed="false">야간</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="guide">
+    <div class="card"><h2 id="gTitle">평행주차 요령</h2><ol id="gSteps"></ol><p class="note" id="gNote"></p></div>
+    <div class="card"><h2>차량 제원 (시뮬레이션 값)</h2><table id="spec"></table>
+      <p class="note">회전 직경은 공개 제원 근사치, 최대 바퀴 각도는 회전 직경·축거로 계산한 값. 실제 차량과 오차 있음.</p></div>
+  </div>
+  <footer class="disc">본 프로그램은 가상 시뮬레이션으로 오락 및 참고용이며, 실제 도로교통법 및 안전 수칙을 대체하지 않습니다.</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ===== 기본 설정 =====
+const $ = s => document.querySelector(s);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const wrapPI = a => Math.atan2(Math.sin(a), Math.cos(a));
+const DEG = 180 / Math.PI;
+const LOCK = 450; // 핸들 화면상 최대 회전(°) – 조향 100%에 대응
+
+// 차량 제원 (m). TD = 회전 직경(바퀴 기준, 근사)
+const CARS = {
+  my:  { label:'TymY', L:4.79, W:1.92, H:1.62, WB:2.89, FO:0.94, RO:0.96, TR:1.64, TD:12.1, color:0x5a6880 },
+  cmp: { label:'준중형 세단(비교)', L:4.71, W:1.825, H:1.42, WB:2.72, FO:0.90, RO:1.09, TR:1.58, TD:10.6, color:0x8e9aa6 }
+};
+// 회전 직경 → 최대 바퀴 각도(자전거 모델, 뒤차축 기준)
+function deltaMax(c){ const r = c.TD/2; const R0 = Math.sqrt(r*r - c.WB*c.WB) - c.TR/2; return Math.atan(c.WB/R0); }
+
+const DIFF = {
+  par: [ {label:'여유 7.5m', gap:7.5}, {label:'보통 6.6m', gap:6.6}, {label:'좁음 6.1m', gap:6.1} ],
+  t:   [ {label:'확장형 2.6m·통로 6.5m', bw:2.6, depth:5.2, aisle:6.5}, {label:'일반형 2.5m·통로 6.0m', bw:2.5, depth:5.0, aisle:6.0}, {label:'좁은 2.3m·통로 5.5m', bw:2.3, depth:5.0, aisle:5.5} ]
+};
+
+// ===== 상태 =====
+const S = { scen:'t', diff:1, car:'my', x:0, z:0, th:0, v:0, wheel:0, wheelTarget:null, gear:'P',
+  accel:false, brake:false, keys:{}, hits:0, shifts:0, lastDir:null, t0:null, elapsed:0, contact:null, tilt:0, near:Infinity, curb:null };
+const OPT = { av:true, real:false, guide:true, tilt:true, big:false, cams:false, fold:false, dist:false, traffic:1, theme:'auto' };
+try { Object.assign(OPT, JSON.parse(localStorage.getItem('parkOpt')||'{}')); } catch(e){}
+const saveOpt = () => { try { localStorage.setItem('parkOpt', JSON.stringify(OPT)); } catch(e){} };
+const CAR = () => CARS[S.car];
+const steerRad = () => (S.wheel/LOCK) * deltaMax(CAR());
+
+// ===== Three.js 장면 =====
+const canvas = $('#cv'), stage = $('#stage');
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias:true }); }
+catch(e){ stage.innerHTML = '<p style="color:#fff;padding:20px;line-height:1.5">이 기기에서 3D(WebGL)를 사용할 수 없습니다.</p>'; throw e; }
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+renderer.setClearColor(0x15191d);
+renderer.autoClear = false;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xb9cdd9);
+scene.fog = new THREE.Fog(0xb9cdd9, 70, 170);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x4a5560, 0.9); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 0.55); sun.position.set(30, 50, -20); scene.add(sun);
+// 조명은 모든 레이어(어라운드 뷰 포함)에 적용
+scene.children.forEach(o => { if(o.isLight) o.layers.enableAll(); });
+
+const mats = {};
+function mat(color, basic){ const k = color+'|'+(basic?1:0); if(!mats[k]){ mats[k] = basic ? new THREE.MeshBasicMaterial({color, side:THREE.DoubleSide}) : new THREE.MeshLambertMaterial({color, side:THREE.DoubleSide}); mats[k].userData.c = color; } return mats[k]; }
+
+// ===== 주간/야간 =====
+// 야간 전용 재질: material.visible 로 한 번에 켜고 끔 (가로등 빛, 창문, 전조등·후미등)
+const NIGHT = { on:false, mats:[] };
+function nightMat(m){ m.visible = NIGHT.on; NIGHT.mats.push(m); return m; }
+const GLOW_TEX = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  const r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.45, 'rgba(255,255,255,.42)'); r.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c);
+})();
+const glowMat = (color, opacity) => new THREE.MeshBasicMaterial({ map:GLOW_TEX, color, transparent:true, opacity, depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide });
+const GROUND_GEO = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI/2);
+// 바닥 빛 웅덩이 (실제 광원 대신 가산 합성 그라데이션 → 모바일에서도 가벼움)
+function pool(parent, x, z, sx, sz, m){ const p = new THREE.Mesh(GROUND_GEO, m); p.scale.set(sx, 1, sz); p.position.set(x, 0.025, z); p.renderOrder = 3; parent.add(p); return p; }
+const LAMP_POOL = nightMat(glowMat(0xffd49a, 0.42));     // 가로등 아래
+const BEAM_MAT  = nightMat(glowMat(0xfff4dc, 0.5));      // 전조등 빛
+const TAIL_POOL = nightMat(glowMat(0xff2a1a, 0.3));      // 후미등 붉은 빛
+const REV_MAT   = glowMat(0xffffff, 0.38); REV_MAT.visible = false;   // 후진등 (야간 + R)
+const HEAD_GLOW = nightMat(new THREE.MeshBasicMaterial({ color:0xfffbea }));
+const TAIL_GLOW = nightMat(new THREE.MeshBasicMaterial({ color:0xff2a1a }));
+const WIN_MAT   = nightMat(new THREE.MeshBasicMaterial({ color:0xffd28a, side:THREE.DoubleSide }));
+const LAMP_MAT  = new THREE.MeshBasicMaterial({ color:0xcfd3d8 });   // 가로등 갓: 야간에 발광
+const SCREEN_MAT = new THREE.MeshBasicMaterial({ color:0xdfe3e8 });  // 실내 중앙 디스플레이
+const TEXT_MATS = [];   // 바닥 글씨 (야간 감광)
+// 장면별 조명: [주간, 야간]
+const LOOK = {
+  par: [ { sky:0xb9cdd9, fn:70, ff:170, hemi:.9, hc:0xffffff, hg:0x4a5560, sun:.55, sc:0xffffff, dim:1 },
+         { sky:0x070b16, fn:22, ff:120, hemi:.26, hc:0x8193b8, hg:0x12151c, sun:.08, sc:0x9fb4ff, dim:.5 } ],
+  t:   [ { sky:0xb9cdd9, fn:70, ff:170, hemi:.9, hc:0xffffff, hg:0x4a5560, sun:.55, sc:0xffffff, dim:1 },
+         { sky:0x070b16, fn:60, ff:160, hemi:.6, hc:0xe6eaff, hg:0x30353c, sun:.2, sc:0xffffff, dim:.82 } ]
+};
+const LIT = { hemi:.9, sun:.55, dim:1 };
+function setDim(k){
+  for(const m of Object.values(mats)) if(m.isMeshBasicMaterial && m.userData.c !== undefined && m.userData.c !== 0xffffff) m.color.setHex(m.userData.c).multiplyScalar(k);
+  TEXT_MATS.forEach(m => m.color.setScalar(k));
+}
+const DARK_MQ = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : { matches:false };
+function isNight(){ const t = OPT.theme || 'auto'; return t === 'night' || (t === 'auto' && DARK_MQ.matches); }
+const boxGeo = new THREE.BoxGeometry(1,1,1);
+// 박스: x(길이), y(높이), z(폭) 범위로 생성
+function box(parent, x0, x1, y0, y1, z0, z1, color, basic){
+  const m = new THREE.Mesh(boxGeo, mat(color, basic));
+  m.scale.set(Math.max(x1-x0,.001), Math.max(y1-y0,.001), Math.max(z1-z0,.001));
+  m.position.set((x0+x1)/2, (y0+y1)/2, (z0+z1)/2);
+  if(basic && color === 0xe2b11b){ // 황색 중앙선: 테슬라 스타일 뷰에서는 흰색
+    const w = new THREE.Mesh(boxGeo, mat(0xe6e6e0, true)); w.scale.copy(m.scale); w.position.copy(m.position); w.layers.set(2); parent.add(w);
+  } else if(basic && color !== 0x2fbf6a) m.layers.enable(2); // 주차선·차선은 테슬라 스타일 뷰에도 표시
+  parent.add(m); return m;
+}
+const wheelGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.24, 18); wheelGeo.rotateX(Math.PI/2);
+function wheel(parent, x, z){ const w = new THREE.Mesh(wheelGeo, mat(0x1b1d1f)); w.position.set(x, 0.34, z); parent.add(w); return w; }
+
+// 테슬라 스타일 어라운드 뷰용 덩어리(점토 형태) – 레이어 2에만 표시
+const BLOB_BASE = (() => {
+  const g = new THREE.SphereGeometry(1, 32, 20), p = g.attributes.position;
+  const f = v => Math.sign(v) * Math.pow(Math.abs(v), 0.55); // 구 → 모서리가 둥근 상자
+  for(let i = 0; i < p.count; i++) p.setXYZ(i, f(p.getX(i)), f(p.getY(i)), f(p.getZ(i)));
+  return g;
+})();
+const BLOB_MAT = new THREE.MeshLambertMaterial({ color:0xc9cacb, emissive:0x161718, side:THREE.DoubleSide });
+const AV_BG = new THREE.Color(0x0b0c0e);   // 어라운드 뷰 배경: 주간 밝은 회색 / 야간 검정
+function blob(cx, cz, th, hl, hw, h){
+  const g = BLOB_BASE.clone(), p = g.attributes.position, k1 = Math.random()*6, k2 = Math.random()*6;
+  for(let i = 0; i < p.count; i++){
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const n = 1 + 0.04*Math.sin(x*5 + k1)*Math.sin(z*4 + k2) + 0.025*Math.sin(y*7 + k2); // 울퉁불퉁한 표면
+    p.setXYZ(i, x*hl*n, y*h/2*n, z*hw*n);
+  }
+  g.computeVertexNormals();
+  const m = new THREE.Mesh(g, BLOB_MAT); m.position.set(cx, h*0.48, cz); m.rotation.y = -th; m.layers.set(2); world.add(m); return m;
+}
+
+// 카메라
+const camMain = new THREE.PerspectiveCamera(55, 1, 0.05, 400);
+const camRear = new THREE.PerspectiveCamera(17, 3.4, 0.05, 300);
+const camL = new THREE.PerspectiveCamera(28, 1.5, 0.05, 300);
+const camR = new THREE.PerspectiveCamera(34, 1.5, 0.05, 300);
+const camAv = new THREE.OrthographicCamera(-5, 5, 7, -7, 1, 100);
+// 테슬라 카메라: 후방(광각) + 양쪽 펜더 리피터 카메라(디지털 사이드미러)
+const camBk = new THREE.PerspectiveCamera(74, 1.6, 0.05, 300);
+const camRL = new THREE.PerspectiveCamera(52, 1.4, 0.05, 300);
+const camRR = new THREE.PerspectiveCamera(52, 1.4, 0.05, 300);
+[camBk, camRL, camRR].forEach(cm => cm.layers.enable(3));
+camBk.layers.enable(1); // 후방카메라에 예상 궤적
+camAv.layers.enable(1); // 예상 궤적은 어라운드 뷰에서만 표시
+camMain.layers.enable(4); camRear.layers.enable(4); // 차 안 시점: 실내·보닛
+camL.layers.enable(3); camR.layers.enable(3);       // 바깥 시점: 매끄러운 차체
+[camMain, camRear, camL, camR, camBk, camRL, camRR].forEach(cm => cm.layers.enable(5)); // 천장·조명
+
+let world = new THREE.Group(); scene.add(world);
+let hazLamps = [], steerSpin = null, mirrors = [], MIR = null, mirFolded = null, OWN_OUT = null;
+// 위에서 본 차체 윤곽(곡선 차체 makeShell과 같은 식) → 보이는 그대로 충돌 판정
+function outline(front, rear, W, n = 14){
+  const L = front - rear, hwAt = u => { const s = 2*u - 1; return W/2*(0.9 + 0.1*Math.sqrt(Math.max(0, 1 - s*s)))*Math.sqrt(Math.max(0, 1 - Math.pow(Math.abs(s), 10))); };
+  const us = []; for(let i = 0; i <= n; i++){ const t = i/n; us.push(0.5 - 0.5*Math.cos(Math.PI*t)); } // 끝부분 촘촘하게
+  const right = us.map(u => [rear + u*L, hwAt(u)]), left = us.slice(1, -1).reverse().map(u => [rear + u*L, -hwAt(u)]);
+  return right.concat(left);
+}
+// 사이드미러 충돌 사각형 2개 (접으면 차체 쪽으로 작아짐)
+function mirrorPolys(st){
+  if(!MIR) return [];
+  const zo = OPT.fold ? MIR.zoF : MIR.zo, x0 = OPT.fold ? MIR.x0 - 0.1 : MIR.x0;
+  return [-1, 1].map(sg => [wp(st, MIR.x1, sg*MIR.hw), wp(st, MIR.x1, sg*zo), wp(st, x0, sg*zo), wp(st, x0, sg*MIR.hw)]);
+}
+let own = null, frontPivots = [], obstacles = [], target = null, rnd, zones = [];
+let camPts = {};
+
+function mulberry(a){ return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+// 목표 공간 바로 옆 차량: 눈에 잘 띄는 색
+const NEAR_A = 0xd9483b, NEAR_B = 0x3d93e6;
+const CAR_COLORS = [0x2e3237, 0x7d1d22, 0x4a5868, 0xd8d8d4, 0x1e3956, 0x6a6e71, 0xb6afa2, 0x111315, 0xc9ccd0];
+
+// 주차된 차량 (중심 원점, +x 방향)
+function parkedCar(cx, cz, th, len, w, h, color){
+  const g = new THREE.Group();
+  const suv = h > 1.58; // 높이로 차종 구분: SUV / 세단
+  g.add(makeShell({ front: len/2, rear: -len/2, W: w, H: h, color, prof: suv ? PROF.suv : PROF.sedan, belt: suv ? 0.6 : 0.58, NU: 30 }));
+  [[len*0.31, -(w/2-0.13)], [len*0.31, w/2-0.13], [-len*0.31, -(w/2-0.13)], [-len*0.31, w/2-0.13]].forEach(p => wheel(g, p[0], p[1]));
+  g.position.set(cx, 0, cz); g.rotation.y = -th; world.add(g);
+  addObs(cx, cz, th, len/2, w/2, 'car', h, outline(len/2, -len/2, w, 10));
+}
+function addObs(cx, cz, th, hl, hw, kind, h, shape){
+  blob(cx, cz, th, hl, hw, h || 1.2);
+  const c = Math.cos(th), s = Math.sin(th);
+  const pt = (lx, lz) => [cx + c*lx - s*lz, cz + s*lx + c*lz];
+  obstacles.push({ cx, cz, r: Math.hypot(hl, hw), kind, poly: shape ? shape.map(p => pt(p[0], p[1])) : [pt(hl,-hw), pt(hl,hw), pt(-hl,hw), pt(-hl,-hw)] });
+}
+
+// ===== 바닥 글씨 (흰 페인트) =====
+// flip=true: 글씨 위쪽이 +z를 향함 (−z 쪽 통로·도로에서 읽힘)
+function floorText(t, x, z, flip, w){
+  w = w || 1.7;
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
+  const g2 = cv.getContext('2d'); g2.fillStyle = '#f4f4ef'; g2.font = '800 ' + (t.length > 3 ? 92 : 104) + 'px sans-serif'; g2.textAlign = 'center'; g2.textBaseline = 'middle';
+  g2.fillText(t, 128, 68);
+  const tex = new THREE.CanvasTexture(cv); tex.anisotropy = 4;
+  const tm = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }); TEXT_MATS.push(tm);
+  const pl = new THREE.Mesh(new THREE.PlaneGeometry(w, w/2), tm);
+  pl.rotation.x = -Math.PI/2; if(flip) pl.rotation.z = Math.PI;
+  pl.position.set(x, 0.014, z); world.add(pl);
+}
+const GREEN_MAT = new THREE.MeshBasicMaterial({ color:0x2fbf6a, transparent:true, opacity:.22, side:THREE.DoubleSide, depthWrite:false });
+function greenZone(x0, x1, z0, z1){ box(world, x0, x1, 0, 0.012, z0, z1, 0x2fbf6a, true).material = GREEN_MAT; }
+
+// 주차 차량 종류: 경차 / 일반 / 대형 SUV·승합
+function pickCar(){
+  const t = rnd();
+  if(t < 0.1) return { len: 3.6, w: 1.6, h: 1.52 };
+  if(t < 0.25) return { len: 5.05 + rnd()*0.1, w: 1.96, h: 1.82 };
+  return { len: 4.5 + rnd()*0.4, w: 1.82 + rnd()*0.1, h: 1.45 + rnd()*0.25 };
+}
+
+// ===== 평행주차 장면 =====
+// 도로 진행 방향 +x, 오른쪽(+z)이 연석. 6m 구획, 출발 쪽부터 120, 119, … 번호
+function buildPar(){
+  const d = DIFF.par[S.diff], curbZ = 2.4, gs = -d.gap/2, ge = d.gap/2, SL = 6.0, KMIN = -9, KMAX = 9;
+  box(world, -260, 260, -0.02, 0, -7, curbZ, 0x3c4146);           // 차도
+  box(world, -260, 260, 0, 0.15, curbZ, curbZ+0.18, 0xb9b8b1);     // 연석
+  blob(0, curbZ+0.09, 0, 260, 0.1, 0.17); blob(0, -7.09, 0, 260, 0.1, 0.17);
+  box(world, -260, 260, 0, 0.14, curbZ+0.18, curbZ+4.5, 0x8f8f88); // 보도
+  box(world, -260, 260, 0, 0.15, -7.18, -7, 0xb9b8b1);
+  box(world, -260, 260, 0, 0.14, -11.5, -7.18, 0x8f8f88);
+  // 차선: 중앙선(황색 2줄), 주차구역 경계(백색)
+  box(world, -260, 260, 0, 0.01, -3.42, -3.32, 0xe2b11b, true);
+  box(world, -260, 260, 0, 0.01, -3.25, -3.15, 0xe2b11b, true);
+  box(world, -260, 260, 0, 0.01, -0.05, 0.07, 0xe6e6e0, true);
+  for(let k = KMIN; k <= KMAX + 1; k++){ const x = SL*k - SL/2; box(world, x-0.06, x+0.06, 0, 0.01, 0, curbZ, 0xe6e6e0, true); }
+  const slotNo = k => 120 - (k - KMIN);
+  for(let k = KMIN; k <= KMAX; k++) floorText(String(slotNo(k)), SL*k, curbZ/2 + 0.1, true, 1.6);
+  target = { curbZ, gs, ge, gaps: [] };
+  // 주차 차량: 구획마다 차종·연석 간격·비뚤어짐을 다르게
+  const zc = w => curbZ - 0.25 - w/2;
+  const EMPTY = [0, -5, 5];          // 0: 기본 목표(난이도별 공간), ±5: 넉넉한 빈 구획
+  const placed = [];
+  for(let k = KMIN; k <= KMAX; k++){
+    if(EMPTY.includes(k)) continue;
+    const v = pickCar(), sloppy = rnd() < 0.18;
+    const off = sloppy ? 0.45 + rnd()*0.3 : 0.15 + rnd()*0.2;           // 연석과의 간격
+    const ang = sloppy ? (rnd() - 0.5)*0.12 : (rnd() - 0.5)*0.04;        // 비뚤게 세운 차
+    let cx;
+    if(k === 1) cx = ge + v.len/2 + 0.02;
+    else if(k === -1) cx = gs - v.len/2 - 0.02;
+    else { const room = Math.max(0, SL - v.len - 0.3); cx = SL*k + (rnd() - 0.5)*room; }
+    const cz = curbZ - off - v.w/2;
+    const col = k === 1 ? NEAR_A : k === -1 ? NEAR_B : v.h > 1.75 ? 0xe9e9e6 : CAR_COLORS[(k + 27) % 9];
+    parkedCar(cx, cz, ang, v.len, v.w, v.h, col);
+    placed.push({ k, x0: cx - v.len/2 - Math.abs(ang)*v.w/2, x1: cx + v.len/2 + Math.abs(ang)*v.w/2 });
+  }
+  // 빈 구획 = 앞뒤 차 사이 공간 (성공 판정 대상, 초록 표시)
+  for(const kE of EMPTY){
+    const behind = placed.filter(p => p.k < kE).map(p => p.x1), ahead = placed.filter(p => p.k > kE).map(p => p.x0);
+    const g0 = kE === 0 ? gs : Math.max(...behind, SL*kE - SL), g1 = kE === 0 ? ge : Math.min(...ahead, SL*kE + SL);
+    target.gaps.push({ gs: g0, ge: g1, no: slotNo(kE) });
+    greenZone(g0, g1, 0.1, curbZ);
+  }
+  // 가로수·건물 (미러 거리감용)
+  for(let tx = -240; tx < 240; tx += 9){
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 3, 8), mat(0x5b4636)); t.position.set(tx+2, 1.6, curbZ+1.2); world.add(t);
+    const c = new THREE.Mesh(new THREE.SphereGeometry(1.4, 10, 8), mat(0x557a43)); c.position.set(tx+2, 3.8, curbZ+1.2); world.add(c);
+  }
+  const wins = [], wr = mulberry(97);   // 야간에 켜지는 창문 (도로 쪽 면)
+  const addWins = (bx, bw, h, zf) => { for(let y = 2; y < h - 1; y += 3) for(let x = bx + 0.9; x < bx + bw - 0.6; x += 1.9) if(wr() < 0.38) wins.push([x, y, zf]); };
+  for(let bx = -250; bx < 250; bx += 12){ const h = 6 + rnd()*10; box(world, bx, bx+11.4, 0, h, curbZ+4.5, curbZ+12, [0xc8c2b6,0xa9b2b8,0xd5cfc3,0x9aa49c][Math.floor(rnd()*4)]); addWins(bx, 11.4, h, curbZ+4.48); }
+  for(let bx = -250; bx < 250; bx += 14){ const h = 5 + rnd()*12; box(world, bx, bx+13.4, 0, h, -19, -11.5, [0xbab4a8,0x9ea8ae,0xcfc9bd][Math.floor(rnd()*3)]); addWins(bx, 13.4, h, -11.48); }
+  const wm = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.1, 0.95), WIN_MAT, wins.length), m4 = new THREE.Matrix4();
+  wins.forEach((w, i) => wm.setMatrixAt(i, m4.makeTranslation(w[0], w[1], w[2]))); world.add(wm);
+  // 가로등: 양쪽 보도, 18m 간격 (갓은 야간에 발광, 바닥엔 빛 웅덩이)
+  const headGeo = new THREE.BoxGeometry(0.7, 0.12, 0.32);
+  for(const [zp, za, off] of [[curbZ + 0.55, curbZ - 0.9, 0], [-7.55, -6.1, 9]]){
+    const sg = Math.sign(za - zp);
+    for(let lx = -243 + off; lx < 243; lx += 18){
+      box(world, lx-0.07, lx+0.07, 0, 6.1, zp-0.07, zp+0.07, 0x4a4f55);
+      box(world, lx-0.04, lx+0.04, 6.0, 6.08, Math.min(zp, za), Math.max(zp, za), 0x4a4f55);
+      const hd = new THREE.Mesh(headGeo, LAMP_MAT); hd.position.set(lx, 5.94, za); world.add(hd);
+      pool(world, lx, za + sg*0.4, 12, 9, LAMP_POOL);
+    }
+  }
+  // 시작 위치: 앞차 옆, 옆 간격 약 0.8m, 진행 방향 +x
+  const c = CAR();
+  S.z = zc(1.86) - 0.93 - 0.8 - c.W/2; S.x = SL*KMIN - 1.5 + c.RO; S.th = 0;   // 120번 구획 옆에서 출발
+  updDist();
+}
+
+// ===== T형(직각) 주차 장면: 통로 2개 · 주차 줄 4개 지하주차장 =====
+// 진행 방향 +x. 통로1(z≈0): 왼쪽 A줄, 오른쪽 B줄 / 통로2: 위쪽 C줄(A와 등을 맞댐), 아래쪽 D줄
+// 줄 양 끝은 통로 폭만큼의 회전 통로로 연결되고, 바깥은 벽
+function buildT(){
+  const d = DIFF.t[S.diff], N = 14, bw = d.bw, D = d.depth, A = d.aisle;
+  const x0 = -(N-1)*bw/2, xN = x0 + N*bw, xF = xN + 2*bw, xR = x0 - 5.0;   // 앞쪽 끝: B·D줄 2칸 연장 폭, 출발 쪽: 5m
+  const PIL = [1, 4, 9, 12], PW = Math.min(0.2, (bw - 1.92)/2 - 0.04), PZ0 = 0.15, PZ1 = 0.95;   // 기둥: 칸 경계 입구 쪽 (칸 폭에 맞춰 TymY가 들어갈 수 있는 굵기)
+  const ROWS = [
+    { n:'A', zIn: -A/2, dir: -1, N }, { n:'B', zIn: A/2, dir: 1, N: N+2 },
+    { n:'C', zIn: -A/2 - 2*D, dir: 1, N }, { n:'D', zIn: -1.5*A - 2*D, dir: -1, N: N+2 }   // B·D(바깥 줄)는 벽까지 16칸
+  ];
+  ROWS.forEach(r => { r.zBack = r.zIn + r.dir*D; });
+  const zMax = A/2 + D, zMin = -1.5*A - 3*D, zA2 = -A - 2*D;   // 바깥 줄 뒤쪽, 통로2 중심
+  box(world, -90, 90, -0.02, 0, zMin-8, zMax+8, 0x7f8487);   // 바닥
+  // 천장·조명 (어라운드 뷰에는 안 보이도록 레이어 5)
+  box(world, xR-6, xF+6, 3.0, 3.1, zMin-2, zMax+2, 0xa9aeb1, true).layers.set(5);
+  for(let lx = xR; lx < xF; lx += 6) for(const lz of [-1.2, 1.2, zA2-1.2, zA2+1.2, A/2+2.5, -A/2-D, zMin+2.5]) box(world, lx, lx+1.2, 2.96, 3.0, lz-0.08, lz+0.08, 0xffffff, true).layers.set(5);
+  // 외벽 4면
+  const wall = (x0w, x1w, z0w, z1w) => { box(world, x0w, x1w, 0, 3.0, z0w, z1w, 0xd6d5cf); addObs((x0w+x1w)/2, (z0w+z1w)/2, 0, (x1w-x0w)/2, (z1w-z0w)/2, 'wall', 3.0); };
+  wall(xR-0.3, xF+0.55, zMax+0.2, zMax+0.5);
+  wall(xR-0.3, xF+0.55, zMin-0.5, zMin-0.2);
+  wall(xF+0.25, xF+0.55, zMin-0.2, zMax+0.2);   // 끝 칸(B16·D16) 옆 벽은 라인에서 25cm 띄움
+  wall(xR-0.3, xR, zMin-0.2, zMax+0.2);
+  // 회전 구간 바닥 화살표 대신 통로 중앙 점선
+  for(const zc of [0, zA2]) for(let x = xR+1; x < xF-1; x += 3) box(world, x, x+1.5, 0, 0.01, zc-0.06, zc+0.06, 0xd9d9d2, true);
+  const white = 0xe8e8e2;
+  for(const r of ROWS){
+    const za = Math.min(r.zIn, r.zBack), zb = Math.max(r.zIn, r.zBack);
+    for(let i = 0; i <= r.N; i++){ const x = x0 + i*bw; box(world, x-0.06, x+0.06, 0, 0.01, za, zb, white, true); }
+    box(world, x0, x0 + r.N*bw, 0, 0.01, r.zBack-0.06, r.zBack+0.06, white, true);
+    for(const i of PIL){
+      const x = x0 + i*bw, p0 = r.zIn + r.dir*PZ0, p1 = r.zIn + r.dir*PZ1, pa = Math.min(p0, p1), pb = Math.max(p0, p1);
+      box(world, x-PW, x+PW, 0.15, 3.0, pa, pb, 0xeeeeea);
+      box(world, x-PW-0.01, x+PW+0.01, 0, 0.15, pa-0.01, pb+0.01, 0x2a2c2e);
+      for(const ex of [x-PW, x+PW]) for(const ez of [pa, pb]){
+        box(world, ex-0.03, ex+0.03, 0.15, 1.35, ez-0.03, ez+0.03, 0x1d1f21);
+        box(world, ex-0.035, ex+0.035, 0.25, 1.25, ez-0.035, ez+0.035, 0xe6b70c);
+      }
+      addObs(x, (pa+pb)/2, 0, PW, (pb-pa)/2, 'wall', 3.0);
+    }
+    for(let i = 0; i < r.N; i++){
+      const cx = x0 + (i+0.5)*bw, sz = r.zBack - r.dir*0.7;   // 카스토퍼
+      for(const o of [-0.55, 0.55]) box(world, cx+o-0.28, cx+o+0.28, 0, 0.12, r.dir > 0 ? sz : sz-0.15, r.dir > 0 ? sz+0.15 : sz, 0xd9a400);
+      floorText(r.n + (i+1), cx, (r.zIn + r.zBack)/2, r.dir > 0);
+    }
+  }
+  const k = 6;   // 기본 목표: B7
+  target = { rows: ROWS, x0, xN, bw, D, empties: [], bx0: x0 + k*bw, bx1: x0 + (k+1)*bw };
+  // 빈 칸: 기본 목표 + 기둥 옆 + 끝 칸 + 다른 통로의 칸
+  const EMPTY = ['B7', 'B5', 'B10', 'B14', 'B16', 'A4', 'A14', 'C3', 'C9', 'C14', 'D6', 'D11', 'D14', 'D16'];
+  ROWS.forEach((r, ri) => { for(let i = 0; i < r.N; i++){
+    const name = r.n + (i+1), lucky = rnd(), v = pickCar(), sloppy = rnd() < 0.15;
+    const bx0 = x0 + i*bw, bx1 = bx0 + bw;
+    if(EMPTY.includes(name) || ((r.n === 'C' || r.n === 'D') && lucky < 0.08)){
+      target.empties.push({ bx0, bx1, row: r, i }); greenZone(bx0+0.06, bx1-0.06, Math.min(r.zIn, r.zBack), Math.max(r.zIn, r.zBack));
+      continue;
+    }
+    const room = Math.max(0, bw - v.w - 0.15);
+    let cx = bx0 + bw/2 + (rnd() - 0.5)*room*(sloppy ? 1.4 : 0.8);
+    const tilt = sloppy ? (rnd() - 0.5)*0.14 : (rnd() - 0.5)*0.05;
+    // 옆 칸 라인을 넘지 않게 (비뚤어진 만큼 여유), 기둥도 피하기
+    const ex = Math.abs(Math.sin(tilt))*v.len/2 + v.w/2 + 0.06;
+    const lo = bx0 + ex + (PIL.includes(i) ? PW + 0.02 : 0), hi = bx1 - ex - (PIL.includes(i+1) ? PW + 0.02 : 0);
+    cx = lo <= hi ? clamp(cx, lo, hi) : (lo + hi)/2;
+    const cz = r.zBack - r.dir*(0.35 + v.len/2);
+    const facesAisle = rnd() < 0.7;   // 후진주차(앞이 통로 쪽)가 70%
+    const th = (facesAisle ? -r.dir : r.dir)*Math.PI/2 + tilt;
+    const col = name === 'B6' ? NEAR_B : name === 'B8' ? NEAR_A : v.h > 1.75 ? 0xe9e9e6 : CAR_COLORS[(i*3 + ri*5) % 9];
+    parkedCar(cx, cz, th, v.len, v.w, v.h, col);
+  }});
+  // 이중주차: 통로1 A9~A10 앞, 통로2 C12 앞
+  parkedCar(x0 + 9*bw, -A/2 + 0.55 + 0.93, 0, 4.7, 1.86, 1.48, 0xdcdcd8);
+  parkedCar(x0 + 11.5*bw, ROWS[2].zIn - 0.55 - 0.93, Math.PI, 4.6, 1.84, 1.5, 0x8a929b);
+  // 불법주차: 앞쪽 끝 회전 구간, A14·C14 줄 끝 바로 옆에 회전 구간 방향으로
+  parkedCar(xN + 0.35 + 0.93, -A/2 - D, Math.PI/2 + 0.04, 4.6, 1.86, 1.5, 0x6b2a2e);
+  // 시작 위치: 통로1 가운데, B7 앞쪽
+  S.x = x0 + (k+0.5)*bw - 9; S.z = -0.2; S.th = 0;
+  updDist();
+}
+
+// ===== 내 차 =====
+// 옆에서 본 지붕선 (뒤범퍼 → 루프 → 앞유리 → 보닛 → 노즈), 최고 높이 = 1
+const PROF = {
+  y:     [[0,.383],[.02,.568],[.07,.667],[.2,.852],[.35,.975],[.5,1],[.6,.938],[.7,.691],[.78,.605],[.92,.543],[.98,.444],[1,.34]],
+  sedan: [[0,.39],[.03,.55],[.12,.58],[.22,.61],[.32,.88],[.45,1],[.58,.99],[.68,.74],[.76,.62],[.92,.56],[.98,.46],[1,.35]],
+  suv:   [[0,.42],[.02,.62],[.06,.78],[.12,.95],[.25,1],[.55,1],[.66,.93],[.74,.68],[.8,.6],[.94,.56],[.985,.46],[1,.36]]
+};
+// 길이 방향 단면을 이어 붙인 차체 (부품별 분리: 하부 트림 · 차체 · 유리 · 지붕 · 램프 · 미러)
+// sp = { front, rear, W, H, color, prof, belt, NU, glassRoof, mirrors }
+const SHELL_MATS = {};
+function shellMat(color, shin, emis){
+  const k = color + '|' + shin + '|' + (emis || 0);
+  if(!SHELL_MATS[k]) SHELL_MATS[k] = new THREE.MeshPhongMaterial({ color, shininess: shin, specular: shin > 60 ? 0x4a4a4a : 0x262626, emissive: emis || 0, side: THREE.DoubleSide });
+  return SHELL_MATS[k];
+}
+function makeShell(sp){
+  const front = sp.front, rear = sp.rear, L = front - rear, hk = sp.H, prof = sp.prof, NU = sp.NU || 48, yb = 0.2;
+  const topY = u => { for(let i = 1; i < prof.length; i++) if(u <= prof[i][0]){ const a = prof[i-1], b = prof[i], t = (u-a[0])/(b[0]-a[0]), s = t*t*(3-2*t); return (a[1] + (b[1]-a[1])*s)*hk; } return prof[prof.length-1][1]*hk; };
+  const hwAt = u => { const s = 2*u - 1; return sp.W/2*(0.9 + 0.1*Math.sqrt(Math.max(0, 1 - s*s)))*Math.sqrt(Math.max(0, 1 - Math.pow(Math.abs(s), 10))); };
+  const beltBase = (sp.belt || 0.6)*hk;
+  const chaikin = (pts, n) => { for(let k = 0; k < n; k++){ const out = [pts[0]]; for(let i = 0; i < pts.length-1; i++){ const p = pts[i], q = pts[i+1]; out.push([p[0]*.75+q[0]*.25, p[1]*.75+q[1]*.25], [p[0]*.25+q[0]*.75, p[1]*.25+q[1]*.75]); } out.push(pts[pts.length-1]); pts = out; } return pts; };
+  // 단면 함수(u → 반쪽 단면 [z, y], 아래 가운데 → 위 가운데)로 매끄러운 면 생성
+  const loft = (sectionFn, smooth, mat) => {
+    const pos = [], idx = []; let ring = 0;
+    for(let i = 0; i <= NU; i++){
+      const u = i/NU, half = chaikin(sectionFn(u), smooth), pts = half.concat(half.slice(1, -1).reverse().map(p => [-p[0], p[1]]));
+      for(const p of pts) pos.push(rear + u*L, p[1], p[0]);
+      ring = pts.length;
+    }
+    for(let i = 0; i < NU; i++) for(let j = 0; j < ring; j++){ const a = i*ring+j, b = i*ring+(j+1)%ring, e = (i+1)*ring+j, f = (i+1)*ring+(j+1)%ring; idx.push(a, e, b, b, e, f); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+    return new THREE.Mesh(g, mat);
+  };
+  const G = new THREE.Group();
+  const belt = u => Math.min(beltBase, topY(u));
+  // 1) 하부 트림(범퍼·사이드 스커트): 어두운 무광
+  G.add(loft(u => { const hw = hwAt(u)*1.008; return [[0, yb], [hw*0.86, yb], [hw, yb+0.09], [hw, yb+0.24], [0, yb+0.24]]; }, 1, shellMat(0x2a2c2f, 10)));
+  // 2) 차체(벨트라인까지, 유리가 없는 앞뒤는 보닛·트렁크 윗면)
+  G.add(loft(u => { const hw = hwAt(u), y0 = yb + 0.2, top = Math.max(y0 + 0.12, belt(u)), mid = Math.max(y0 + 0.1, top - 0.12);
+    return [[0, y0], [hw*0.9, y0], [hw, y0 + 0.06], [hw, mid], [hw*0.95, top], [0, top]]; }, 2, shellMat(sp.color, 45)));
+  // 3) 유리(창·앞뒤 유리): 벨트라인 위 전부
+  G.add(loft(u => { const hw = hwAt(u), b = belt(u) - 0.015, yt = Math.max(topY(u), b + 0.001), gh = clamp((yt - b)/0.55, 0, 1), rw = hw*(0.96 - 0.26*gh);
+    return [[0, b], [hw*0.96, b], [rw, Math.max(b, yt - 0.07)], [rw*0.55, yt], [0, yt]]; }, 2, shellMat(0x111821, 90)));
+  // 4) 지붕(차체 색). 글라스 루프 차량은 생략
+  if(!sp.glassRoof) G.add(loft(u => { const hw = hwAt(u), b = belt(u), yt = topY(u), rf = clamp((yt - b - 0.3)/0.12, 0, 1), rw = hw*(0.96 - 0.26*clamp((yt - b)/0.55, 0, 1))*0.9*rf;
+    return [[0, yt - 0.02], [rw, yt - 0.02], [rw*0.97, yt + 0.004], [rw*0.5, yt + 0.016], [0, yt + 0.016]]; }, 1, shellMat(sp.color, 45)));
+  // 5) 램프(분리된 부품, 번짐 없음)
+  const part = (x, y, z, sx, sy, sz, color, emis, shin) => { const m = new THREE.Mesh(BLOB_BASE, shellMat(color, shin || 80, emis)); m.scale.set(sx/2, sy/2, sz/2); m.position.set(x, y, z); G.add(m); };
+  for(const sg of [-1, 1]){
+    const zf = sg*Math.max(0.2, hwAt(0.975) - 0.3), zr = sg*Math.max(0.2, hwAt(0.03) - 0.3);
+    part(front - 0.1, topY(0.975) - 0.1, zf, 0.2, 0.09, 0.42, 0xe9eef3, 0x3a3a3a);   // 헤드램프
+    part(rear + 0.1, topY(0.025) - 0.13, zr, 0.2, 0.1, 0.48, 0xb8161c, 0x3a0000);     // 테일램프
+    if(sp.mirrors !== false){                                                         // 사이드미러
+      let ua = 0.5; for(let u = 0.5; u < 0.95; u += 0.01) if(topY(u) - belt(u) < 0.25){ ua = u - 0.02; break; }
+      part(rear + ua*L, belt(ua) + 0.1, sg*(hwAt(ua) + 0.09), 0.12, 0.12, 0.2, sp.color, 0, 45);
+    }
+  }
+  return G;
+}
+
+function buildOwn(){
+  if(own) scene.remove(own);
+  const c = CAR(); own = new THREE.Group(); frontPivots = []; OWN_OUT = null;
+  const belt = c.H*0.6, eyeX = c.WB - 1.62, eyeY = c.H - 0.42, eyeZ = -0.37;
+  const front = c.WB + c.FO, rear = -c.RO, hw = c.W/2;
+  // ===== 실내 (운전석·룸미러 시점 전용) =====
+  const IC = { dash:0x2c2f34, door:0x3b3e44, trim:0x575b62, pil:0x45484e, seat:0x36383c, glass:0x16202b };
+  const wz = hw - 0.06, aX0 = eyeX + 0.80, aX1 = eyeX + 0.10, roofY = c.H - 0.06, roofZ = hw - 0.25, bX = eyeX - 0.58, rX = eyeX - 1.45, deck = S.car === 'my' ? 0.55 : 0.62; // deck: 뒷유리 아랫단 위치(세단은 트렁크가 길어 앞쪽)
+  // 두 점을 잇는 기둥(기울어진 필러용)
+  const beam = (a, b, tx, tz, color) => {
+    const d = new THREE.Vector3(b[0]-a[0], b[1]-a[1], b[2]-a[2]), len = d.length();
+    const m = new THREE.Mesh(boxGeo, mat(color)); m.scale.set(tx, len, tz);
+    m.position.set((a[0]+b[0])/2, (a[1]+b[1])/2, (a[2]+b[2])/2); m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), d.normalize()); own.add(m); return m;
+  };
+  box(own, aX0, front, 0.26, belt, -hw, hw, c.color);                        // 보닛
+  box(own, rear, rear+deck, 0.26, belt+0.06, -hw, hw, c.color);              // 트렁크(해치 아래)
+  box(own, rear+0.4, aX0, 0.24, 0.3, -wz, wz, 0x17191c);                     // 바닥
+  // 대시보드 · 중앙 가로형 디스플레이
+  box(own, eyeX+0.45, aX0+0.03, belt-0.16, belt+0.05, -wz, wz, IC.dash);
+  box(own, eyeX+0.6, aX0+0.03, belt+0.05, belt+0.08, -wz+0.04, wz-0.04, 0x15171a);
+  box(own, eyeX+0.62, eyeX+0.65, belt-0.08, belt+0.11, -0.19, 0.19, 0x08090b);
+  box(own, eyeX+0.615, eyeX+0.62, belt-0.065, belt+0.095, -0.175, 0.175, 0x1c2633).material = SCREEN_MAT;
+  box(own, eyeX+0.45, aX0, 0.3, belt-0.16, -wz, wz, 0x1d1f23);              // 발 공간(대시 아래)
+  // 핸들 (조향에 따라 회전)
+  const swG = new THREE.Group(); swG.position.set(eyeX+0.42, eyeY-0.4, eyeZ); swG.rotation.z = 0.35; own.add(swG);
+  steerSpin = new THREE.Group(); swG.add(steerSpin);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.022, 8, 32), mat(0x141618)); rim.rotation.y = Math.PI/2; steerSpin.add(rim);
+  box(steerSpin, -0.02, 0.02, -0.02, 0.02, -0.17, 0.17, 0x1d2023); box(steerSpin, -0.02, 0.02, -0.17, 0, -0.02, 0.02, 0x1d2023);
+  box(steerSpin, -0.03, 0.03, -0.05, 0.05, -0.06, 0.06, 0x2a2e33);
+  // 센터콘솔 · 좌석
+  box(own, bX, eyeX+0.45, 0.3, 0.72, -0.12, 0.12, IC.dash);
+  for(const sz of [-0.37, 0.37]){
+    box(own, eyeX-0.25, eyeX+0.25, 0.3, 0.56, sz-0.25, sz+0.25, IC.seat);   // 쿠션
+    box(own, eyeX-0.32, eyeX-0.16, 0.56, eyeY-0.02, sz-0.25, sz+0.25, IC.seat);  // 등받이
+    box(own, eyeX-0.3, eyeX-0.18, eyeY, eyeY+0.2, sz-0.12, sz+0.12, IC.seat);    // 머리받이
+  }
+  box(own, eyeX-1.38, eyeX-0.86, 0.3, 0.6, -wz+0.04, wz-0.04, IC.seat);   // 뒷좌석
+  box(own, eyeX-1.48, eyeX-1.32, 0.6, eyeY-0.06, -wz+0.04, wz-0.04, IC.seat);
+  for(const hz of [-0.5, 0, 0.5]) box(own, eyeX-1.46, eyeX-1.36, eyeY-0.06, eyeY+0.08, hz-0.11, hz+0.11, IC.seat);
+  for(const sg of [-1, 1]){
+    const zi = sg*wz, zo = sg*(wz+0.05);
+    const zr = (a, b) => [Math.min(sg*a, sg*b), Math.max(sg*a, sg*b)];
+    // 도어 트림(앞·뒷문) + 창틀 아래 선반 + 팔걸이
+    for(const [x0d, x1d] of [[bX, aX0], [rX-0.1, bX]]){
+      box(own, x0d, x1d, 0.3, belt+0.04, ...zr(wz, wz+0.05), IC.door);
+      box(own, x0d, x1d, belt+0.04, belt+0.07, ...zr(wz-0.06, wz+0.05), IC.trim);
+      box(own, x0d+0.15, x1d-0.15, 0.6, 0.66, ...zr(wz-0.1, wz), IC.trim);
+    }
+    box(own, rear+0.4, rX-0.1, 0.3, belt+0.16, ...zr(wz, wz+0.05), IC.door);   // 뒷 쿼터 패널
+    // 필러: A(앞으로 누운 경사) · B · C(패스트백)
+    beam([aX0, belt+0.05, sg*(hw-0.09)], [aX1, roofY, sg*roofZ], 0.09, 0.07, IC.pil);
+    beam([bX, belt+0.05, sg*(wz+0.02)], [bX-0.06, roofY, sg*(roofZ+0.04)], 0.13, 0.08, IC.pil);
+    beam([rear+deck, belt+0.12, sg*(wz-0.02)], [rX, roofY, sg*(roofZ+0.04)], 0.22, 0.08, IC.pil);
+    beam([aX1, roofY, sg*roofZ], [rX, roofY, sg*(roofZ+0.04)], 0.06, 0.12, IC.pil);   // 루프 사이드 레일
+  }
+  beam([aX1, roofY, -roofZ], [aX1, roofY, roofZ], 0.08, 0.08, IC.pil);                 // 앞유리 윗틀
+  beam([rX, roofY, -roofZ-0.04], [rX, roofY, roofZ+0.04], 0.08, 0.08, IC.pil);          // 뒷유리 윗틀
+  beam([rear+deck, belt+0.12, -wz], [rear+deck, belt+0.12, wz], 0.06, 0.06, IC.pil);   // 뒷유리 아랫틀
+  box(own, rX, aX1, roofY, roofY+0.03, -roofZ, roofZ, IC.glass);                       // 글라스 루프
+  // 위 박스들은 운전석·룸미러 시점 전용(레이어 4), 외부에서는 매끄러운 차체로 표시
+  own.traverse(o => { if(o !== own) o.layers.set(4); });
+  // TymY 외관 (사이드미러·카메라·어라운드 뷰에서만 표시, 레이어 3)
+  const shell = makeShell({ front, rear, W: c.W, H: c.H, color: c.color, prof: S.car === 'my' ? PROF.y : PROF.sedan, belt: 0.6, glassRoof: S.car === 'my', mirrors: false });
+  shell.traverse(o => o.layers.set(3)); own.add(shell);
+  // 비상등 램프: 앞뒤 모서리 주황, 깜빡임
+  hazLamps = [];
+  for(const [lx, lz] of [[front-0.06, -hw+0.12], [front-0.06, hw-0.12], [rear+0.04, -hw+0.1], [rear+0.04, hw-0.1]]){
+    const lm = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({ color:0xff9a1a })); lm.scale.set(0.12, 0.08, 0.22); lm.position.set(lx, lx > 0 ? 0.72*c.H/1.62 : 0.9*c.H/1.62, lz);
+    lm.layers.set(3); lm.layers.enable(0); lm.layers.enable(2); lm.visible = false; own.add(lm); hazLamps.push(lm);
+  }
+  // 사이드미러 하우징(카메라 앞쪽에 위치)
+  const mx = eyeX + 0.62, my = belt + 0.13, mz = hw + 0.11;
+  mirrors = [box(own, mx+0.01, mx+0.14, my-0.08, my+0.08, -mz-0.1, -mz+0.12, c.color), box(own, mx+0.01, mx+0.14, my-0.08, my+0.08, mz-0.12, mz+0.1, c.color)];
+  mirrors.forEach(m => { m.userData.p = m.position.clone(); m.userData.s = m.scale.clone(); });
+  MIR = { x0: mx, x1: mx+0.15, hw, zo: mz+0.1, zoF: hw+0.07 }; mirFolded = null; // 충돌 범위(펼침/접힘)
+  const rmx = eyeX + 0.45, rmy = c.H - 0.13;
+  box(own, rmx+0.01, rmx+0.04, rmy-0.04, rmy+0.04, -0.13, 0.13, 0x16191c);
+  // 바퀴
+  const tz = c.TR/2;
+  wheel(own, 0, -tz); wheel(own, 0, tz);
+  for(const z of [-tz, tz]){ const p = new THREE.Group(); p.position.set(c.WB, 0, z); wheel(p, 0, 0); own.add(p); frontPivots.push(p); }
+  // 카메라 장착 위치 (차량 좌표)
+  camPts = {
+    main: [eyeX, eyeY, eyeZ], mainT: [eyeX+10, eyeY-1.15, eyeZ],
+    L: [mx, my, -mz], R: [mx, my, mz], rear: [rmx, rmy, 0],
+    bk: [rear - 0.03, 0.88*c.H/1.62, 0], rl: [c.WB - 0.1, 0.9*c.H/1.62, -(hw + 0.05)], rr: [c.WB - 0.1, 0.9*c.H/1.62, hw + 0.05]
+  };
+  // 테슬라 스타일 뷰에도 실제 차 모델 표시
+  own.traverse(o => { if(!(o.layers.mask & 24)) o.layers.enable(2); }); // 바퀴·미러는 테슬라 스타일 뷰에도
+  // 근접 경고 구역: 앞 3·뒤 3·양옆 각 3 (바닥에 주황/빨강으로 표시)
+  zones = [];
+  const zg = new THREE.PlaneGeometry(1, 1); zg.rotateX(-Math.PI/2);
+  const addZone = (x, z, sx, sz, px, pz) => {
+    const m = new THREE.Mesh(zg, new THREE.MeshBasicMaterial({ color:0xff8a1f, transparent:true, opacity:0, depthWrite:false, side:THREE.DoubleSide }));
+    m.scale.set(sx, 1, sz); m.position.set(x, 0.03, z); m.layers.set(2); m.renderOrder = 4; own.add(m); zones.push({ m, px, pz });
+  };
+  const ccx = (front + rear)/2, L3 = (front - rear)/3, W3 = c.W/3, t = 0.5;
+  for(const k of [-1, 0, 1]){
+    addZone(front + t/2, k*W3, t, W3, front, k*W3);
+    addZone(rear - t/2, k*W3, t, W3, rear, k*W3);
+    const x = ccx + k*L3;
+    addZone(x, -hw - t/2, L3, t, x, -hw); addZone(x, hw + t/2, L3, t, x, hw);
+  }
+  pool(own, front + 4.6, 0, 10, 5.2, BEAM_MAT); pool(own, front + 1.6, 0, 3.4, 3.2, BEAM_MAT);
+  pool(own, rear - 0.9, 0, 2.4, 2.8, TAIL_POOL); pool(own, rear - 2.6, 0, 5.5, 3.6, REV_MAT);
+  [camMain, camRear, camL, camR, camBk, camRL, camRR].forEach(cam => own.add(cam));
+  camBk.position.set(...camPts.bk); camRL.position.set(...camPts.rl); camRR.position.set(...camPts.rr);
+  camMain.position.set(...camPts.main); camL.position.set(...camPts.L); camR.position.set(...camPts.R); camRear.position.set(...camPts.rear);
+  scene.add(own);
+}
+
+// ===== 예상 궤적 리본 =====
+const RN = 42;
+function makeRibbon(color){
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(RN*6), 3));
+  const idx = []; for(let i = 0; i < RN-1; i++){ const a = i*2; idx.push(a, a+1, a+2, a+1, a+3, a+2); } g.setIndex(idx);
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color, side:THREE.DoubleSide, transparent:true, opacity:.95, depthWrite:false }));
+  m.frustumCulled = false; m.layers.set(1); m.renderOrder = 5; scene.add(m); return m;
+}
+const ribbons = [makeRibbon(0xffc400), makeRibbon(0xffc400), makeRibbon(0x5fd0ff)];
+function setRibbon(m, pts, w){
+  const p = m.geometry.attributes.position.array, n = pts.length;
+  for(let i = 0; i < n; i++){
+    const a = pts[Math.max(0,i-1)], b = pts[Math.min(n-1,i+1)];
+    const tx = b[0]-a[0], tz = b[1]-a[1], l = Math.hypot(tx,tz) || 1, nx = -tz/l*w/2, nz = tx/l*w/2;
+    p.set([pts[i][0]+nx, 0.05, pts[i][1]+nz, pts[i][0]-nx, 0.05, pts[i][1]-nz], i*6);
+  }
+  m.geometry.attributes.position.needsUpdate = true;
+}
+function updateGuide(){
+  const show = OPT.guide && (OPT.av || OPT.cams) && (S.gear === 'R' || S.gear === 'D');
+  ribbons.forEach(r => r.visible = show);
+  if(!show) return;
+  const c = CAR(), dir = S.gear === 'R' ? -1 : 1, d = steerRad(), ds = 0.15;
+  const lx = dir > 0 ? c.WB + c.FO : -c.RO;
+  let st = { x:S.x, z:S.z, th:S.th };
+  const L = [], R = [], A = [];
+  for(let i = 0; i < RN; i++){
+    L.push(wp(st, lx, -c.W/2)); R.push(wp(st, lx, c.W/2)); A.push(wp(st, 0, 0));
+    const th2 = st.th + dir*ds*Math.tan(d)/c.WB, mt = (st.th+th2)/2;
+    st = { x: st.x + dir*ds*Math.cos(mt), z: st.z + dir*ds*Math.sin(mt), th: th2 };
+  }
+  setRibbon(ribbons[0], L, 0.09); setRibbon(ribbons[1], R, 0.09); setRibbon(ribbons[2], A, 0.05);
+}
+
+// ===== 기하 계산 =====
+function wp(st, lx, lz){ const c = Math.cos(st.th), s = Math.sin(st.th); return [st.x + c*lx - s*lz, st.z + s*lx + c*lz]; }
+function carPoly(st){ const c = CAR(); if(!OWN_OUT) OWN_OUT = outline(c.WB + c.FO, -c.RO, c.W); return OWN_OUT.map(p => wp(st, p[0], p[1])); }
+function wheelPts(st){ const c = CAR(), z = c.TR/2 + 0.12; return [wp(st,0,-z), wp(st,0,z), wp(st,c.WB,-z), wp(st,c.WB,z)]; }
+function overlap(A, B){
+  for(const P of [A, B]) for(let i = 0; i < P.length; i++){
+    const p1 = P[i], p2 = P[(i+1)%P.length], ax = -(p2[1]-p1[1]), az = p2[0]-p1[0];
+    let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+    for(const q of A){ const d = q[0]*ax + q[1]*az; a0 = Math.min(a0,d); a1 = Math.max(a1,d); }
+    for(const q of B){ const d = q[0]*ax + q[1]*az; b0 = Math.min(b0,d); b1 = Math.max(b1,d); }
+    if(a1 < b0 || b1 < a0) return false;
+  }
+  return true;
+}
+function segDist(p, a, b){ const dx = b[0]-a[0], dz = b[1]-a[1], l2 = dx*dx+dz*dz; let t = l2 ? ((p[0]-a[0])*dx + (p[1]-a[1])*dz)/l2 : 0; t = clamp(t,0,1); return Math.hypot(p[0]-a[0]-t*dx, p[1]-a[1]-t*dz); }
+function polyDist(A, B){ let m = Infinity; for(const [P,Q] of [[A,B],[B,A]]) for(const p of P) for(let i = 0; i < Q.length; i++) m = Math.min(m, segDist(p, Q[i], Q[(i+1)%Q.length])); return m; }
+
+// 충돌 판정: 'car'(차체 접촉) / 'curb'(연석) / 'stop'(카스토퍼) / null
+function checkHit(st){
+  const poly = carPoly(st), cx = st.x + Math.cos(st.th)*1.4, cz = st.z + Math.sin(st.th)*1.4;
+  const mps = mirrorPolys(st);
+  for(const o of allObs()){ if(Math.hypot(o.cx-cx, o.cz-cz) > o.r + 3.5) continue; if(overlap(poly, o.poly)) return o.kind === 'wall' ? 'wall' : 'car'; if(mps.some(mp => overlap(mp, o.poly))) return 'mirror'; }
+  const wps = wheelPts(st);
+  if(S.scen === 'par'){ if(wps.some(p => p[1] > target.curbZ)) return 'curb'; }
+  else { for(const r of target.rows) if(wps.some(p => p[0] > target.x0 && p[0] < target.x0 + r.N*target.bw && (p[1] - r.zIn)*r.dir > 0 && (r.zBack - p[1])*r.dir > 0 && (r.zBack - p[1])*r.dir < 1.0)) return 'stop'; } // 줄마다 카스토퍼
+  if(Math.abs(st.x) > 120 || Math.abs(st.z) > 30) return 'wall';
+  return null;
+}
+
+// ===== 주행 차량 (평행주차 도로) =====
+// 내 차선(+x 방향, 중앙선 오른쪽)과 반대 차선(−x 방향). 차마다 성격이 무작위:
+// wait(그냥 기다림) / honk(기다리다 경적) / pass(반대 차선이 비면 추월)
+let traffic = [], tSpawn = { own: 4, opp: 1 }, myPts = [];
+const LANE = { own: { z: -1.6, dir: 1, x0: -230 }, opp: { z: -5.1, dir: -1, x0: 230 } };   // 멀리서 생성: 내 차까지 약 20~30초
+const allObs = () => traffic.length ? obstacles.concat(traffic) : obstacles;
+function carMesh(len, w, h, color){
+  const g = new THREE.Group(), suv = h > 1.58;
+  g.add(makeShell({ front: len/2, rear: -len/2, W: w, H: h, color, prof: suv ? PROF.suv : PROF.sedan, belt: suv ? 0.6 : 0.58, NU: 30 }));
+  [[len*0.31, -(w/2-0.13)], [len*0.31, w/2-0.13], [-len*0.31, -(w/2-0.13)], [-len*0.31, w/2-0.13]].forEach(p => wheel(g, p[0], p[1]));
+  const b = blob(0, 0, 0, len/2, w/2, h); world.remove(b); g.add(b);   // 테슬라 스타일 뷰용 덩어리
+  for(const sg of [-1, 1]){   // 야간: 전조등·후미등 발광 + 앞쪽 바닥 빛
+    const hl = new THREE.Mesh(BLOB_BASE, HEAD_GLOW); hl.scale.set(0.06, 0.05, 0.18); hl.position.set(len/2 - 0.04, 0.42*h, sg*(w/2 - 0.32)); g.add(hl);
+    const tl = new THREE.Mesh(BLOB_BASE, TAIL_GLOW); tl.scale.set(0.06, 0.05, 0.22); tl.position.set(-len/2 + 0.04, 0.55*h, sg*(w/2 - 0.3)); g.add(tl);
+  }
+  pool(g, len/2 + 4.5, 0, 10, 5, BEAM_MAT); pool(g, -len/2 - 0.8, 0, 2.2, 2.6, TAIL_POOL);
+  return g;
+}
+function sampleEdges(P){ const out = []; for(let i = 0; i < P.length; i++){ const a = P[i], b = P[(i+1)%P.length]; for(const t of [0, 0.25, 0.5, 0.75]) out.push([a[0] + (b[0]-a[0])*t, a[1] + (b[1]-a[1])*t]); } return out; }
+function tPose(t, x, z, th){ return t.out.map(p => wp({ x, z, th }, p[0], p[1])); }
+function spawnCar(lane, x){
+  const L = LANE[lane]; x = x === undefined ? L.x0 : x;
+  if(traffic.some(o => o.lane === lane && Math.abs(o.x - x) < 15)) return;
+  const r = Math.random(), big = r < 0.15, mini = r > 0.9;
+  const len = big ? 5.0 : mini ? 3.6 : 4.5 + Math.random()*0.4, w = big ? 1.95 : mini ? 1.6 : 1.82 + Math.random()*0.1, h = big ? 1.8 : mini ? 1.52 : 1.45 + Math.random()*0.12;
+  const color = CAR_COLORS[Math.floor(Math.random()*9)];
+  const g = carMesh(len, w, h, color); world.add(g);
+  const pr = Math.random(), persona = pr < 0.35 ? 'wait' : pr < 0.7 ? 'honk' : 'pass';
+  const t = { g, lane, dir: L.dir, len, w, x, z: L.z, homeZ: L.z, tz: L.z, th: L.dir > 0 ? 0 : Math.PI, cruise: 6 + Math.random()*3, persona,
+    wait: 0, honked: 0, passing: false, kind: 'car', r: Math.hypot(len/2, w/2), out: outline(len/2, -len/2, w, 8) };
+  t.v = t.cruise; t.cx = x; t.cz = L.z; t.poly = tPose(t, x, L.z, t.th);
+  traffic.push(t);
+}
+// 진행 방향 앞쪽에서 가장 가까운 장애물까지 거리 (내 차·다른 주행 차)
+function aheadGap(t, zc){
+  const z0 = zc - t.w/2 - 0.3, z1 = zc + t.w/2 + 0.3, fx = t.x + t.dir*t.len/2;
+  let best = Infinity, who = null;
+  const test = (pts, o) => { for(const p of pts){ if(p[1] < z0 || p[1] > z1) continue; const d = (p[0] - fx)*t.dir; if(d > -0.3 && d < best){ best = d; who = o; } } };
+  test(myPts, 'me');
+  for(const o of traffic) if(o !== t && Math.abs(o.x - t.x) < 45) test(o.poly, o);
+  return { d: best, who };
+}
+const oppClear = t => !traffic.some(o => o !== t && (o.lane === 'opp' || o.passing) && (o.x - t.x) > -12 && (o.x - t.x) < 55);
+function stepTraffic(dt){
+  if(S.scen !== 'par' || !+OPT.traffic){ if(traffic.length){ traffic.forEach(t => world.remove(t.g)); traffic = []; } return; }
+  const k = +OPT.traffic === 2 ? 0.45 : 1;
+  for(const lane of ['own', 'opp']){
+    tSpawn[lane] -= dt;
+    if(tSpawn[lane] <= 0){ spawnCar(lane); tSpawn[lane] = (lane === 'own' ? 13 + Math.random()*12 : 7 + Math.random()*8)*k; }
+  }
+  const myPoly = carPoly(S), myMir = mirrorPolys(S);
+  myPts = sampleEdges(myPoly); myMir.forEach(m => myPts.push(...sampleEdges(m)));
+  const myMaxX = Math.max(...myPoly.map(p => p[0]));
+  for(const t of traffic){
+    const g = aheadGap(t, t.passing ? t.tz : t.z);
+    // 내 차 때문에 멈췄거나, 내 차 때문에 멈춘 앞차 뒤에 줄 선 경우
+    const blockedByMe = (g.who === 'me' && g.d < 12) || (g.who && g.who !== 'me' && g.who.v < 0.3 && g.who.wait > 2 && g.d < 10);
+    if(blockedByMe && t.v < 0.3){
+      t.wait += dt;
+      if((t.persona === 'honk' || (t.persona === 'pass' && t.lane === 'opp')) && t.wait > (S.haz ? 8 : 2.5) && performance.now() - t.honked > 7000){
+        t.honked = performance.now(); toast((t.lane === 'own' ? '빵! 뒤차' : '빵! 마주 오는 차') + '가 경적을 울립니다', 'warn');
+      }
+      if(t.persona === 'pass' && t.lane === 'own' && !t.passing && t.wait > 1.5 && oppClear(t)){ t.passing = true; t.tz = LANE.opp.z; }
+    } else if(!blockedByMe) t.wait = 0;
+    if(t.passing && t.x - t.len/2 > myMaxX + 4){ t.tz = t.homeZ; if(Math.abs(t.z - t.homeZ) < 0.05) t.passing = false; }
+    // 속도: 앞 장애물과 2.2m 간격 유지
+    const gapM = S.haz && (g.who === 'me' || (g.who && g.who !== 'me' && g.who.wait > 0)) ? 6 : 2.2;   // 비상등: 넉넉히 떨어져 정지
+    let want = Math.max(0, Math.min(t.cruise, (g.d - gapM)*0.8));
+    if(t.passing && Math.abs(t.tz - t.z) > 0.3) want = Math.min(Math.max(want, 1.2), 3);   // 차선 바꾸는 중엔 천천히
+    t.v = want < t.v ? Math.max(want, t.v - 6*dt) : Math.min(want, t.v + 1.8*dt);
+    const dz = t.tz - t.z, lat = Math.sign(dz)*Math.min(Math.abs(dz), 1.3*dt);
+    const fwd = t.dir*t.v*dt;
+    const th = Math.atan2(lat/dt, t.dir*Math.max(t.v, 0.6));
+    // 이동 후 내 차와 겹치면 그 움직임은 하지 않음 (옆으로만 이동 재시도)
+    const hitsMe = P => overlap(P, myPoly) || myMir.some(m => overlap(P, m));
+    let P = tPose(t, t.x + fwd, t.z + lat, th);
+    if(hitsMe(P)){ t.v = 0; P = tPose(t, t.x, t.z + lat, th); if(hitsMe(P)) continue; t.z += lat; }
+    else { t.x += fwd; t.z += lat; }
+    t.th = th; t.poly = P; t.cx = t.x; t.cz = t.z;
+    t.g.position.set(t.x, 0, t.z); t.g.rotation.y = -th;
+  }
+  traffic = traffic.filter(t => { const out = t.x < -245 || t.x > 245; if(out) world.remove(t.g); return !out; });
+}
+
+// ===== 물리 =====
+function approach(v, t, d){ return v < t ? Math.min(t, v+d) : Math.max(t, v-d); }
+function step(dt){
+  if(S.keys.ArrowLeft) { S.wheel -= 320*dt; S.wheelTarget = null; }
+  if(S.keys.ArrowRight){ S.wheel += 320*dt; S.wheelTarget = null; }
+  if(S.wheelTarget !== null){ const d = S.wheelTarget - S.wheel, m = 540*dt; if(Math.abs(d) <= m){ S.wheel = S.wheelTarget; S.wheelTarget = null; } else S.wheel += Math.sign(d)*m; }
+  S.wheel = clamp(S.wheel, -LOCK, LOCK);
+
+  const dir = S.gear === 'D' ? 1 : S.gear === 'R' ? -1 : 0;
+  const acc = S.accel || S.keys.ArrowUp, brk = S.brake || S.keys.ArrowDown || S.keys[' '];
+  let tgt = 0, rate;
+  if(dir && acc && !brk){ tgt = dir*(dir > 0 ? 1.8 : 1.3); rate = 0.9; }
+  else rate = brk ? 5 : (S.gear === 'N' ? 0.4 : 2.2); // 엑셀 떼면 원페달(회생제동) 감속
+  S.v = approach(S.v, tgt, rate*dt);
+  if(S.gear === 'P') S.v = 0;
+  if(Math.abs(S.v) < 1e-4) return;
+  if(S.t0 === null) S.t0 = performance.now();
+
+  const c = CAR(), d = steerRad(), ds = S.v*dt;
+  const th2 = S.th + ds*Math.tan(d)/c.WB, mt = (S.th + th2)/2;
+  const nst = { x: S.x + ds*Math.cos(mt), z: S.z + ds*Math.sin(mt), th: th2 };
+  let hit = checkHit(nst);
+  if(hit === 'mirror' && checkHit(S) === 'mirror') hit = null; // 이미 겹친 상태(접었다 펼친 경우)에서는 빠져나오기 허용
+  if(hit){
+    S.v = 0;
+    if(S.contact !== hit){
+      S.contact = hit;
+      if(hit === 'car' || hit === 'wall' || hit === 'mirror'){ S.hits++; flash(); toast(hit === 'car' ? '접촉! 주차된 차에 닿아 멈췄습니다' : hit === 'mirror' ? '접촉! 사이드미러가 닿아 멈췄습니다' : '접촉! 벽·기둥에 닿아 멈췄습니다', 'bad'); }
+      else if(hit === 'curb') toast('오른쪽 바퀴가 연석에 닿았습니다', 'warn');
+      else toast('뒷바퀴가 카스토퍼에 닿았습니다', 'ok');
+    }
+  } else { S.x = nst.x; S.z = nst.z; S.th = nst.th; S.contact = null; }
+}
+
+// ===== 화면 배치 =====
+const RECT = {};
+function place(el, r){ el.style.left = r.x+'px'; el.style.top = r.y+'px'; el.style.width = r.w+'px'; el.style.height = r.h+'px'; }
+function flipX(cam){ cam.projectionMatrix.elements[0] *= -1; cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert(); }
+function layout(){
+  const W = stage.clientWidth; if(!W) return;
+  const narrow = W < 720; let H;
+  if(narrow){ // 모바일도 데스크탑과 같은 좌우 배치, 높이는 폭의 약 70%
+    H = Math.round(W*(OPT.av ? 0.7 : 0.62));
+    if(OPT.av){ const mw = Math.round(W*0.64); RECT.main = { x:0, y:0, w:mw, h:H }; RECT.av = { x:mw+3, y:0, w:W-mw-3, h:H }; }
+    else { RECT.main = { x:0, y:0, w:W, h:H }; RECT.av = null; }
+  } else {
+    H = Math.round(Math.min(W*0.5, 620));
+    if(OPT.av){ const mw = Math.round(W*0.64); RECT.main = { x:0, y:0, w:mw, h:H }; RECT.av = { x:mw+4, y:0, w:W-mw-4, h:H }; }
+    else { RECT.main = { x:0, y:0, w:W, h:H }; RECT.av = null; }
+  }
+  const M = RECT.main, s = OPT.big ? 1.35 : 1;
+  const sm = M.w < 460;   // 운전석 화면이 작을 때 미러를 상대적으로 크게
+  const rw = Math.round(Math.min(M.w*0.9, M.w*(sm ? 0.5 : 0.34)*s)), rh = Math.round(rw/3.4);
+  RECT.rear = { x: M.x + Math.round((M.w-rw)/2), y: M.y + 8, w: rw, h: rh };
+  const sw = Math.round(Math.min(M.w*0.46, M.w*(sm ? 0.36 : 0.21)*s)), sh = Math.round(sw*0.66);
+  const sy = Math.min(M.y + Math.round(M.h*0.58), M.y + M.h - sh - 8);
+  RECT.left = { x: M.x + 8, y: sy, w: sw, h: sh };
+  RECT.right = { x: M.x + M.w - sw - 8, y: sy, w: sw, h: sh };
+  // 카메라 화면: 폰은 왼쪽|오른쪽 위, 후면 아래 / 넓은 화면은 왼쪽|후면|오른쪽 한 줄
+  if(OPT.cams){
+    const y0 = H + 4;
+    if(narrow){ const hw2 = Math.floor((W-4)/2), th = Math.round(hw2*0.7);
+      RECT.cl = { x:0, y:y0, w:hw2, h:th }; RECT.cr = { x:W-hw2, y:y0, w:hw2, h:th };
+      RECT.cb = { x:0, y:y0+th+4, w:W, h:Math.round(W*0.58) }; H = RECT.cb.y + RECT.cb.h; }
+    else { const h = Math.round(W*0.2), wl = Math.round(W*0.25);
+      RECT.cl = { x:0, y:y0, w:wl, h }; RECT.cb = { x:wl+4, y:y0, w:W-2*wl-8, h }; RECT.cr = { x:W-wl, y:y0, w:wl, h }; H = y0 + h; }
+  } else RECT.cl = RECT.cr = RECT.cb = null;
+  RECT.H = H; RECT.W = W;
+  renderer.setSize(W, H);
+  place($('#fRear'), RECT.rear); place($('#fLeft'), RECT.left); place($('#fRight'), RECT.right);
+  const fav = $('#fAv'), tav = $('#tAv');
+  fav.hidden = tav.hidden = !RECT.av;
+  tav.textContent = OPT.real ? '어라운드 뷰 · 실제 화면' : '어라운드 뷰';
+  if(RECT.av){ place(fav, RECT.av); tav.style.left = (RECT.av.x+8)+'px'; tav.style.top = (RECT.av.y+8)+'px'; }
+  const tl = $('#tLook'); tl.style.left = (M.x + M.w/2) + 'px'; tl.style.top = (M.y + M.h - 30) + 'px';
+  const tst = $('#toast'); tst.style.top = (RECT.rear.y + RECT.rear.h + 10) + 'px'; tst.style.left = (M.x + M.w/2) + 'px';
+  // 결과 카드: 운전석 화면이 좁으면 전체 화면 가운데에
+  const res = $('#result'), rcW = M.w < 400 ? W : M.w; res.style.left = ((rcW - Math.min(330, rcW*0.9))/2) + 'px'; res.style.width = Math.min(330, rcW*0.9) + 'px'; res.style.top = Math.max(8, M.y + M.h*0.08) + 'px';
+  $('#flash').style.width = M.w+'px'; $('#flash').style.height = M.h+'px';
+
+  camMain.fov = narrow ? (RECT.av ? 72 : 64) : 52; camMain.aspect = M.w/M.h; camMain.updateProjectionMatrix();
+  for(const [cam, r] of [[camRear, RECT.rear], [camL, RECT.left], [camR, RECT.right]]){ cam.aspect = r.w/r.h; cam.updateProjectionMatrix(); flipX(cam); }
+  // 어라운드 뷰 배율: 테슬라 화면처럼 가로 약 12m(양옆 칸 1~2개씩)가 보이도록 폭 기준으로 맞춤
+  if(RECT.av){ const hw = 6, hh = hw*RECT.av.h/RECT.av.w; RECT.hh = hh; Object.assign(camAv, { left:-hw, right:hw, top:hh, bottom:-hh }); camAv.updateProjectionMatrix(); }
+  for(const [id, key, cam, gid] of [['#tCl','cl',camRL,'#gCl'], ['#tCr','cr',camRR,'#gCr'], ['#tCb','cb',camBk,'#gCb']]){
+    const tg = $(id), r = RECT[key], gr = $(gid); tg.hidden = gr.hidden = !r; if(!r) continue;
+    place(gr, r);
+    tg.style.left = (r.x+8)+'px'; tg.style.top = (r.y+8)+'px';
+    cam.aspect = r.w/r.h; cam.updateProjectionMatrix(); flipX(cam); // 테슬라처럼 거울 방향으로 표시
+  }
+}
+new ResizeObserver(layout).observe(stage);
+
+// ===== 렌더 =====
+const tmp = new THREE.Vector3();
+function aim(cam, local){ cam.lookAt(own.localToWorld(tmp.set(local[0], local[1], local[2]))); }
+function sync(dt){
+  const c = CAR(), d = steerRad();
+  own.position.set(S.x, 0, S.z); own.rotation.y = -S.th;
+  frontPivots.forEach(p => p.rotation.y = -d);
+  if(mirrors.length && mirFolded !== OPT.fold){ // 미러 접기/펼치기 모양
+    mirFolded = OPT.fold;
+    mirrors.forEach((m, i) => { m.position.copy(m.userData.p); m.scale.copy(m.userData.s);
+      if(OPT.fold){ const sg = i ? 1 : -1; m.scale.set(0.24, 0.15, 0.06); m.position.x -= 0.06; m.position.z = sg*(MIR.hw + 0.035); } });
+  }
+  if(steerSpin) steerSpin.rotation.x = S.wheel*Math.PI/180; // 실내 핸들 회전
+  const blink = S.haz && (performance.now() % 1000) < 500; hazLamps.forEach(l => l.visible = blink); // 비상등 깜빡임
+  REV_MAT.visible = NIGHT.on && S.gear === 'R';   // 후진등
+  own.updateMatrixWorld(true);
+  S.tilt = approach(S.tilt, (OPT.tilt && S.gear === 'R') ? 1 : 0, 2.5*dt);
+  const dn = -0.55 - 1.9*S.tilt;
+  // 고개 돌리기: 끌고 있는 동안 좌우로 회전, 놓으면 정면으로 복귀
+  if(!lookDrag) S.look *= Math.exp(-7*dt);
+  const la = S.look*Math.PI/180, mp = camPts.main;
+  aim(camMain, [mp[0] + 10*Math.cos(la), camPts.mainT[1] + Math.abs(S.look)/110*0.6, mp[2] - 10*Math.sin(la)]);
+  aim(camL, [camPts.L[0]-10, camPts.L[1]+dn, camPts.L[2]-1.5]);
+  aim(camR, [camPts.R[0]-10, camPts.R[1]+dn, camPts.R[2]+2.3]);
+  aim(camRear, [camPts.rear[0]-10, camPts.rear[1]-0.55, 0]);
+  if(RECT.cb){
+    aim(camBk, [camPts.bk[0]-10, camPts.bk[1]-6.5, 0]);
+    aim(camRL, [camPts.rl[0]-10, camPts.rl[1]-2.6, camPts.rl[2]-4.6]);
+    aim(camRR, [camPts.rr[0]-10, camPts.rr[1]-2.6, camPts.rr[2]+4.6]);
+  }
+  if(RECT.av){
+    const cx = (c.WB + c.FO - c.RO)/2, p = wp(S, cx, 0);
+    camAv.position.set(p[0], 40, p[1]); camAv.up.set(Math.cos(S.th), 0, Math.sin(S.th)); camAv.lookAt(p[0], 0, p[1]);
+  }
+  updateGuide();
+  // 근접 구역 색상 갱신
+  if(RECT.av && !OPT.real){
+    const nearObs = allObs().filter(o => Math.hypot(o.cx - S.x, o.cz - S.z) < o.r + 7);
+    for(const zn of zones){
+      const p = wp(S, zn.px, zn.pz); let dd = Infinity;
+      for(const o of nearObs){ const P = o.poly; for(let i = 0; i < P.length; i++) dd = Math.min(dd, segDist(p, P[i], P[(i+1)%P.length])); }
+      const m = zn.m.material;
+      if(dd < 0.3){ m.color.setHex(0xff3b2f); m.opacity = 0.85; }
+      else if(dd < 0.6){ m.color.setHex(0xff7a1a); m.opacity = 0.7; }
+      else m.opacity = 0;
+    }
+  }
+  $('#wheelG').setAttribute('transform', `rotate(${S.wheel.toFixed(1)})`);
+}
+function vp(r){ const y = RECT.H - r.y - r.h; renderer.setViewport(r.x, y, r.w, r.h); renderer.setScissor(r.x, y, r.w, r.h); }
+function render(){
+  if(!RECT.main) return;
+  renderer.setScissorTest(false); renderer.clear();
+  renderer.setScissorTest(true);
+  vp(RECT.main); renderer.render(scene, camMain);
+  // 고개를 많이 돌리면 미러는 시야에서 빠짐
+  const rearOn = Math.abs(S.look) < 25, sideOn = rearOn && !OPT.fold; // 접으면 실물 사이드미러만 사라짐
+  $('#fRear').style.visibility = rearOn ? '' : 'hidden';
+  for(const id of ['#fLeft', '#fRight']) $(id).style.visibility = sideOn ? '' : 'hidden';
+  if(rearOn){ vp(RECT.rear); renderer.render(scene, camRear); }
+  if(sideOn){ vp(RECT.left); renderer.render(scene, camL); vp(RECT.right); renderer.render(scene, camR); }
+  const camBoost = on => { hemi.intensity = on && NIGHT.on ? LIT.hemi*2.4 : LIT.hemi; };   // 야간 카메라: 노출 보정
+  if(RECT.cb){ camBoost(true); vp(RECT.cl); renderer.render(scene, camRL); vp(RECT.cr); renderer.render(scene, camRR); vp(RECT.cb); renderer.render(scene, camBk); camBoost(false); }
+  if(RECT.av){
+    vp(RECT.av);
+    if(OPT.real){ camBoost(true); camAv.layers.set(0); camAv.layers.enable(1); camAv.layers.enable(3); renderer.render(scene, camAv); camBoost(false); }
+    else { // 테슬라 스타일: 주간 밝은 회색 / 야간 검은 배경 + 점토 덩어리 (조명은 항상 주간 값)
+      camAv.layers.set(2); camAv.layers.enable(1); camAv.layers.enable(3);
+      const bg = scene.background, fog = scene.fog; scene.background = AV_BG; scene.fog = null;
+      const hc = hemi.color.getHex(), hg = hemi.groundColor.getHex(), sc = sun.color.getHex();
+      if(NIGHT.on){ hemi.intensity = 0.9; sun.intensity = 0.55; hemi.color.setHex(0xffffff); hemi.groundColor.setHex(0x4a5560); sun.color.setHex(0xffffff); setDim(1); }
+      renderer.render(scene, camAv);
+      if(NIGHT.on){ hemi.intensity = LIT.hemi; sun.intensity = LIT.sun; hemi.color.setHex(hc); hemi.groundColor.setHex(hg); sun.color.setHex(sc); setDim(LIT.dim); }
+      scene.background = bg; scene.fog = fog;
+    }
+  }
+}
+
+// ===== 계기·메시지 =====
+let toastT;
+function toast(t, kind, ms){ const el = $('#toast'); el.textContent = t; el.className = 'toast show ' + (kind||''); clearTimeout(toastT); toastT = setTimeout(() => el.className = 'toast', ms || 2400); }
+function flash(){ const f = $('#flash'); f.classList.add('on'); setTimeout(() => f.classList.remove('on'), 350); }
+const cls = (el, v) => { el.className = v < 0.3 ? 'c-bad' : v < 1.0 ? 'c-warn' : 'c-ok'; };
+let hudGear = null;
+function hud(){
+  const poly = carPoly(S); let near = Infinity;
+  const cx = S.x + Math.cos(S.th)*1.4, cz = S.z + Math.sin(S.th)*1.4;
+  const mps = mirrorPolys(S);
+  for(const o of allObs()){ if(Math.hypot(o.cx-cx, o.cz-cz) > o.r + 6) continue; near = Math.min(near, polyDist(poly, o.poly), ...mps.map(mp => polyDist(mp, o.poly))); }
+  S.near = near;
+  if(hudGear !== S.gear){ hudGear = S.gear; document.querySelectorAll('#hGear span').forEach(e => e.classList.toggle('on', e.dataset.g === S.gear)); }
+  $('#hSpd').textContent = Math.round(Math.abs(S.v)*3.6);
+  const dg = steerRad()*DEG;
+  $('#hAng').textContent = (Math.abs(dg) < 0.5 ? '0' : (dg < 0 ? '좌 ' : '우 ') + Math.abs(dg).toFixed(0)) + '°';
+  const hn = $('#hNear');
+  if(near > 3) { hn.textContent = '3m+'; hn.className = 'c-ok'; } else { hn.textContent = Math.round(near*100) + ' cm'; cls(hn, near); }
+  if(S.scen === 'par'){
+    const wz = Math.max(...wheelPts(S).filter((_, i) => i % 2 === 1).map(p => p[1]));
+    const cd = target.curbZ - wz; S.curb = cd; const hc = $('#hCurb');
+    if(cd > 3) { hc.textContent = '3m+'; hc.className = ''; } else { hc.textContent = Math.round(cd*100) + ' cm'; hc.className = cd < 0.4 ? 'c-ok' : cd < 1 ? 'c-warn' : ''; }
+  }
+  $('#hHit').textContent = S.hits; $('#hHit').className = S.hits ? 'c-bad' : '';
+  $('#hShift').textContent = S.shifts;
+  const el = S.t0 === null ? 0 : (performance.now() - S.t0)/1000;
+  // 어라운드 뷰 거리 표시 (테슬라처럼 진행 방향 쪽에 cm / 정지)
+  const lb = $('#avLbl');
+  if(false){ // 거리 표시 사용 안 함
+    const ppm = RECT.av.h/(2*RECT.hh), off = 3.6*ppm*(S.gear === 'R' ? 1 : -1);
+    lb.textContent = near < 0.3 ? '정지' : Math.round(near*100) + ' cm';
+    lb.style.left = (RECT.av.x + RECT.av.w/2) + 'px'; lb.style.top = (RECT.av.y + RECT.av.h/2 + off) + 'px'; lb.hidden = false;
+  } else lb.hidden = true;
+  $('#hTime').textContent = Math.floor(el/60) + ':' + String(Math.floor(el%60)).padStart(2,'0');
+  const pct = Math.round(Math.abs(S.wheel)/LOCK*100);
+  $('#steerRd').textContent = pct === 0 ? '중앙 0%' : (S.wheel < 0 ? '왼쪽 ' : '오른쪽 ') + pct + '%';
+  $('#wheel').setAttribute('aria-valuenow', Math.round(S.wheel/LOCK*100));
+}
+
+// ===== 판정 =====
+function evaluate(){
+  hud();
+  const poly = carPoly(S), xs = poly.map(p => p[0]), zs = poly.map(p => p[1]);
+  const minx = Math.min(...xs), maxx = Math.max(...xs), minz = Math.min(...zs);
+  const cm = v => Math.round(v*100) + ' cm';
+  let verdict, cl, why = '', rows = [];
+  if(S.scen === 'par'){
+    // 차가 들어간 빈 구획 찾기 (기본 목표 + 넉넉한 빈 구획)
+    const ccx = xs.reduce((a,b) => a+b)/xs.length;
+    const gap = target.gaps.find(g => ccx >= g.gs - 0.5 && ccx <= g.ge + 0.5) || target.gaps[0];
+    const T = { gs: gap.gs, ge: gap.ge };
+    const inside = minx >= T.gs - 0.02 && maxx <= T.ge + 0.02 && minz >= -0.15;
+    const ang = Math.abs(wrapPI(S.th))*DEG, curb = S.curb;
+    rows = [['구획', gap.no + '번'], ['차체 각도', ang.toFixed(1) + '°'], ['연석까지(바퀴)', cm(curb)], ['앞차까지', cm(T.ge - maxx)], ['뒤차까지', cm(minx - T.gs)]];
+    if(inside && ang <= 4 && curb <= 0.35){ verdict = '성공'; cl = 'v-ok'; }
+    else if(inside && ang <= 10 && curb <= 0.6){ verdict = '부분 성공'; cl = 'v-warn';
+      why = [ang > 4 ? `차체 각도 ${ang.toFixed(1)}° (기준 4°)` : '', curb > 0.35 ? `연석과 ${Math.round(curb*100)}cm (기준 35cm)` : ''].filter(Boolean).join(', '); }
+    else { verdict = '다시 시도'; cl = 'v-bad';
+      why = !inside ? (minx < T.gs - 0.02 ? '뒤차 쪽 공간 밖' : maxx > T.ge + 0.02 ? '앞차 쪽 공간 밖' : '도로 쪽으로 나옴') : curb > 0.6 ? `연석과 ${Math.round(curb*100)}cm로 멀음` : `차체 각도 ${ang.toFixed(1)}°로 큼`; }
+  } else {
+    // 차 중심이 속한 줄·칸 찾기
+    const ccx = xs.reduce((a,b) => a+b)/xs.length, ccz = zs.reduce((a,b) => a+b)/zs.length;
+    const row = target.rows.reduce((b, r) => Math.abs(ccz - (r.zIn + r.zBack)/2) < Math.abs(ccz - (b.zIn + b.zBack)/2) ? r : b);
+    const i = Math.floor((ccx - target.x0)/target.bw), name = row.n + (i+1);
+    const bx0 = target.x0 + i*target.bw, bx1 = bx0 + target.bw;
+    const isEmpty = target.empties.some(e => e.row === row && e.i === i);
+    const dep = Math.min(...zs.map(z => (z - row.zIn)*row.dir));     // 입구선 넘어선 거리 (+: 칸 안)
+    const inside = isEmpty && i >= 0 && i < row.N && minx >= bx0 - 0.05 && maxx <= bx1 + 0.05 && dep >= -0.15;
+    const dev = Math.min(Math.abs(wrapPI(S.th - Math.PI/2)), Math.abs(wrapPI(S.th + Math.PI/2)))*DEG;
+    const rev = Math.sin(S.th)*row.dir < 0;   // 앞이 통로 쪽 = 후진주차
+    const mL = minx - bx0, mR = bx1 - maxx;
+    rows = [['주차 칸', i >= 0 && i < row.N ? name : '칸 밖'], ['주차 방향', rev ? '후진주차' : '전면주차'], ['차체 각도 오차', dev.toFixed(1) + '°'], ['라인 여유 (−x쪽)', cm(mL)], ['라인 여유 (+x쪽)', cm(mR)], ['입구선 넘어선 거리', cm(dep)]];
+    if(inside && dev <= 3){ verdict = '성공'; cl = 'v-ok'; }
+    else if(inside && dev <= 7){ verdict = '부분 성공'; cl = 'v-warn'; why = `각도 오차 ${dev.toFixed(1)}° (기준 3°)`; }
+    else { verdict = '다시 시도'; cl = 'v-bad';
+      why = !isEmpty ? '빈 칸(초록)이 아님' : !inside ? (mL < -0.05 || mR < -0.05 ? '옆 라인 침범' : dep < -0.15 ? '앞부분이 입구선 밖 ' + Math.round(-dep*100) + 'cm' : '주차칸 밖') : `각도 오차 ${dev.toFixed(1)}°로 큼`; }
+  }
+  const el = S.t0 === null ? 0 : (performance.now() - S.t0)/1000;
+  rows.push(['접촉', S.hits + '회'], ['전후진 전환', S.shifts + '회'], ['소요 시간', Math.floor(el/60) + '분 ' + Math.floor(el%60) + '초']);
+  const r = $('#result');
+  r.innerHTML = `<h3 class="${cl}">${verdict}${why ? `<small class="why"> · ${why}</small>` : ''}</h3><dl>${rows.map(x => `<dt>${x[0]}</dt><dd>${x[1]}</dd>`).join('')}</dl>
+    <div class="row"><button class="btn" id="rClose">계속 조정</button><button class="btn primary" id="rAgain">다시 시작</button></div>`;
+  r.hidden = false;
+  $('#rClose').onclick = () => r.hidden = true;
+  $('#rAgain').onclick = () => { r.hidden = true; resetAll(); };
+}
+
+// ===== 입력 =====
+function setGear(g){
+  if(g === S.gear) return;
+  if(Math.abs(S.v) > 0.05){ toast('완전히 멈춘 뒤 변속하세요', 'warn'); return; }
+  if(g === 'R' || g === 'D'){ if(S.lastDir && S.lastDir !== g) S.shifts++; S.lastDir = g; }
+  S.gear = g; S.v = 0;
+  document.querySelectorAll('.gears button').forEach(b => b.setAttribute('aria-pressed', b.dataset.g === g));
+  if(g === 'P' && S.t0 !== null) evaluate(); else $('#result').hidden = true;
+}
+document.querySelectorAll('.gears button').forEach(b => b.onclick = () => setGear(b.dataset.g));
+document.querySelectorAll('[data-steer]').forEach(b => b.onclick = () => { S.wheelTarget = +b.dataset.steer * LOCK; });
+function hold(el, key){
+  const on = e => { e.preventDefault(); S[key] = true; el.classList.add('on'); try { el.setPointerCapture(e.pointerId); } catch(_){} };
+  const off = () => { S[key] = false; el.classList.remove('on'); };
+  el.addEventListener('pointerdown', on); ['pointerup','pointercancel','lostpointercapture'].forEach(t => el.addEventListener(t, off));
+  el.addEventListener('contextmenu', e => e.preventDefault());
+}
+hold($('#pAcc'), 'accel'); hold($('#pBrake'), 'brake');
+$('#pAcc').addEventListener('pointerdown', () => { if(S.gear === 'P' || S.gear === 'N') toast('R 또는 D를 먼저 선택하세요', 'warn'); });
+
+// 운전석 화면 좌우 드래그 → 고개 돌리기 (A·B필러 사이 옆창 확인)
+S.look = 0; let lookDrag = null;
+canvas.addEventListener('pointerdown', e => {
+  const r = canvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, M = RECT.main;
+  if(!M || x < M.x || x > M.x + M.w || y < M.y || y > M.y + M.h) return;
+  lookDrag = { x: e.clientX, start: S.look, w: M.w };
+  try { canvas.setPointerCapture(e.pointerId); } catch(_){}
+  $('#tLook').style.opacity = 0;
+});
+canvas.addEventListener('pointermove', e => {
+  if(!lookDrag) return;
+  S.look = clamp(lookDrag.start + (e.clientX - lookDrag.x)/lookDrag.w*200, -110, 110); // 화면을 잡아당기듯: 왼쪽으로 끌면 오른쪽이 보임
+});
+['pointerup','pointercancel','lostpointercapture'].forEach(t => canvas.addEventListener(t, () => { lookDrag = null; }));
+
+// 핸들 드래그
+const wEl = $('#wheel'); let drag = null;
+wEl.addEventListener('pointerdown', e => {
+  const r = wEl.getBoundingClientRect(); const cx = r.left + r.width/2, cy = r.top + r.height/2;
+  drag = { cx, cy, a: Math.atan2(e.clientY - cy, e.clientX - cx) }; S.wheelTarget = null;
+  try { wEl.setPointerCapture(e.pointerId); } catch(_){} e.preventDefault();
+});
+wEl.addEventListener('pointermove', e => {
+  if(!drag) return;
+  const a = Math.atan2(e.clientY - drag.cy, e.clientX - drag.cx); let d = a - drag.a;
+  if(d > Math.PI) d -= 2*Math.PI; if(d < -Math.PI) d += 2*Math.PI;
+  drag.a = a; S.wheel = clamp(S.wheel + d*DEG, -LOCK, LOCK);
+});
+['pointerup','pointercancel'].forEach(t => wEl.addEventListener(t, () => drag = null));
+wEl.addEventListener('keydown', e => { if(e.key === 'ArrowLeft' || e.key === 'ArrowRight') { /* 전역 처리 */ } });
+
+addEventListener('keydown', e => {
+  if(e.target.tagName === 'SELECT') return;
+  const k = e.key;
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(k)){ S.keys[k] = true; e.preventDefault(); }
+  const g = k.toUpperCase(); if(['P','R','N','D'].includes(g) && !e.repeat) setGear(g);
+});
+addEventListener('keyup', e => { S.keys[e.key] = false; });
+addEventListener('blur', () => { S.keys = {}; S.accel = S.brake = false; });
+
+// 옵션
+const optMap = { oAv:'av', oReal:'real', oGuide:'guide', oTilt:'tilt', oBig:'big', oDist:'dist' };
+for(const [id, k] of Object.entries(optMap)){ const el = $('#'+id); el.checked = !!OPT[k]; el.onchange = () => { OPT[k] = el.checked; saveOpt(); layout(); updDist(); }; }
+$('#oTraffic').value = String(OPT.traffic ?? 1);
+$('#oTraffic').onchange = e => { OPT.traffic = +e.target.value; saveOpt(); e.target.blur(); };
+// 카메라·미러 접기 버튼 (누를 때마다 켜기/끄기)
+function updToggles(){ $('#bCam').setAttribute('aria-pressed', !!OPT.cams); $('#bFold').setAttribute('aria-pressed', !!OPT.fold); }
+$('#bCam').onclick = () => { OPT.cams = !OPT.cams; saveOpt(); updToggles(); layout(); };
+$('#bFold').onclick = () => { OPT.fold = !OPT.fold; saveOpt(); updToggles(); };
+updToggles();
+$('#bHaz').onclick = () => { S.haz = !S.haz; $('#bHaz').setAttribute('aria-pressed', S.haz); toast(S.haz ? '비상등 켬 — 뒤차가 더 멀리서 멈춥니다' : '비상등 끔', '', 1600); };
+// 화면 모드: 자동(시스템 다크모드) / 주간 / 야간 — UI 색과 3D 장면 조명을 함께 전환
+function applyTheme(){
+  const night = isNight(), t = OPT.theme || 'auto';
+  document.documentElement.setAttribute('data-theme', night ? 'dark' : 'light');
+  document.querySelectorAll('[data-theme-opt]').forEach(b => b.setAttribute('aria-pressed', b.dataset.themeOpt === t));
+  NIGHT.on = night; NIGHT.mats.forEach(m => m.visible = night);
+  const P = LOOK[S.scen === 'par' ? 'par' : 't'][night ? 1 : 0];
+  scene.background.setHex(P.sky); scene.fog.color.setHex(P.sky); scene.fog.near = P.fn; scene.fog.far = P.ff;
+  hemi.intensity = P.hemi; hemi.color.setHex(P.hc); hemi.groundColor.setHex(P.hg); sun.intensity = P.sun; sun.color.setHex(P.sc);
+  Object.assign(LIT, { hemi:P.hemi, sun:P.sun, dim:P.dim }); setDim(P.dim);
+  renderer.setClearColor(night ? 0x0a0a0b : 0xd6d8da);
+  BLOB_MAT.color.setHex(night ? 0xc9cacb : 0xf4f5f6); BLOB_MAT.emissive.setHex(night ? 0x161718 : 0x2c2d2e);
+  AV_BG.setHex(night ? 0x0b0c0e : 0xb3b8be);
+  LAMP_MAT.color.setHex(night ? 0xfff1c8 : 0xcfd3d8);
+  SCREEN_MAT.color.setHex(night ? 0x1e2b3d : 0xdfe3e8);
+}
+document.querySelectorAll('[data-theme-opt]').forEach(b => b.onclick = () => { OPT.theme = b.dataset.themeOpt; saveOpt(); applyTheme(); });
+if(DARK_MQ.addEventListener) DARK_MQ.addEventListener('change', () => { if((OPT.theme || 'auto') === 'auto') applyTheme(); });
+// 야간 카메라 화면 노이즈 (한 번 생성)
+(() => { const c = document.createElement('canvas'); c.width = c.height = 96; const g = c.getContext('2d'), d = g.createImageData(96, 96);
+  for(let i = 0; i < d.data.length; i += 4){ const v = Math.random()*255; d.data[i] = d.data[i+1] = d.data[i+2] = v; d.data[i+3] = 70; }
+  g.putImageData(d, 0, 0); const u = 'url(' + c.toDataURL() + ')'; document.querySelectorAll('.cam').forEach(e => e.style.backgroundImage = u); })();
+// 근접 장애물·연석까지 지표: 옵션 체크 시에만 표시 (연석은 평행주차에서만)
+function updDist(){ $('#sNear').hidden = !OPT.dist; $('#sCurb').hidden = !OPT.dist || S.scen !== 'par'; }
+
+// ===== 안내문 =====
+const GUIDE = {
+  par: {
+    title: '평행주차 요령 (오른쪽 노상)',
+    steps: [
+      '<b>나란히 정렬</b> — D, 앞차 옆으로 전진. 옆 간격 약 0.8~1.0m, 도로와 평행 유지. 내 차 뒷범퍼가 앞차 뒷범퍼와 나란한 지점(또는 약 0.5m 앞)에서 정지.',
+      '<b>1차 후진</b> — R, 핸들 오른쪽 끝까지. 천천히 후진하여 차체가 약 45° 기울 때까지. 기준: 왼쪽 사이드미러에 뒤차의 앞모습 전체가 들어오는 시점.',
+      '<b>직진 후진</b> — 핸들 중앙. 오른쪽 미러로 연석 거리 확인하며 후진. 내 차 오른쪽 앞모서리가 앞차 뒷범퍼를 지나면 정지.',
+      '<b>2차 후진</b> — 핸들 왼쪽 끝까지. 차체가 도로와 평행해질 때까지 후진. 근접 표시로 뒤차 간격 확인.',
+      '<b>마무리</b> — D로 앞뒤 간격 조정, 핸들 중앙 정렬 후 P. P 입력 시 판정.'
+    ],
+    note: 'TymY는 회전 직경이 약 12m로 소형차보다 덜 꺾임 → 같은 공간에서 각도가 덜 나옴. 2단계에서 뒤차와 가까워지면 무리하지 말고 D로 살짝 전진해 각도 재조정. 후진 시 사이드미러 하향 기능으로 연석 확인 용이.'
+  },
+  t: {
+    title: 'T형(직각) 후진주차 요령 (오른쪽 칸)',
+    steps: [
+      '<b>접근</b> — D, 통로 가운데로 진행. 주차칸 입구선과 약 1.5m 간격 유지. 목표칸(초록) 위치 확인.',
+      '<b>정지 위치</b> — 운전석이 목표칸 중심을 약 5~6m(2칸 남짓) 지난 지점에서 정지. 통로가 좁으면 정지 직전 핸들을 왼쪽으로 틀어 앞머리를 반대편으로 비스듬히 빼 두기.',
+      '<b>회전 후진</b> — R, 핸들 오른쪽 끝까지. 오른쪽 미러로 안쪽 옆차 앞범퍼와 간격 확인, 왼쪽 미러로 반대쪽 주차선 등장 확인. 앞머리가 반대편 차량에 닿지 않는지 어라운드 뷰로 확인.',
+      '<b>정렬 후진</b> — 양쪽 미러에 좌우 주차선이 같은 간격으로 보이면 핸들 중앙, 직진 후진.',
+      '<b>마무리</b> — 뒷바퀴가 카스토퍼에 닿으면 정지 → P. 좌우 여유가 한쪽으로 쏠리면 D로 빼서 재진입.'
+    ],
+    note: '차폭 1.92m → 일반형 2.5m 칸에서 좌우 여유 각 약 29cm. 회전반경이 커서 회전 중 앞머리가 통로 반대편으로 크게 돌아 나가는 점 주의. 기둥 옆 칸은 입구가 좁아, 회전 중 차체 옆면·모서리가 기둥에 닿기 쉬움 → 기둥을 충분히 지난 뒤 핸들 조작.'
+  }
+};
+function renderGuide(){
+  const g = GUIDE[S.scen];
+  $('#gTitle').textContent = g.title; $('#gSteps').innerHTML = g.steps.map(s => `<li>${s}</li>`).join(''); $('#gNote').textContent = g.note;
+  const c = CAR(), dm = deltaMax(c), r0 = c.WB/Math.tan(dm);
+  const rows = [['차종', c.label], ['전장 × 전폭', c.L.toFixed(2) + ' × ' + c.W.toFixed(2) + ' m'], ['축거', c.WB.toFixed(2) + ' m'],
+    ['앞 / 뒤 오버행', c.FO.toFixed(2) + ' / ' + c.RO.toFixed(2) + ' m'], ['회전 직경(근사)', c.TD.toFixed(1) + ' m'],
+    ['최대 바퀴 각도(계산)', (dm*DEG).toFixed(1) + '°'], ['뒤차축 중심 회전반경', r0.toFixed(2) + ' m']];
+  $('#spec').innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('');
+  $('#spec td:last-child') && ($('#spec tr td:last-child').style.fontFamily = 'var(--font)');
+}
+function fillDiff(){ $('#diff').innerHTML = DIFF[S.scen].map((d, i) => `<option value="${i}">${d.label}</option>`).join(''); $('#diff').value = S.diff; }
+
+// ===== 초기화 =====
+function resetAll(){
+  scene.remove(world); world = new THREE.Group(); scene.add(world); obstacles = []; traffic = []; tSpawn = { own: 3, opp: 4 }; TEXT_MATS.length = 0;
+  rnd = mulberry(S.scen === 'par' ? 11 + S.diff : 37 + S.diff);
+  buildOwn();
+  if(S.scen === 'par'){ buildPar(); if(+OPT.traffic){ spawnCar('opp', 35); spawnCar('opp', -20); } } else buildT();
+  Object.assign(S, { haz:false, v:0, wheel:0, wheelTarget:null, hits:0, shifts:0, lastDir:null, t0:null, contact:null, tilt:0 });
+  S.gear = 'N'; setGear('P'); $('#bHaz').setAttribute('aria-pressed', false);
+  applyTheme();
+  $('#result').hidden = true;
+  renderGuide(); hud();
+  toast(S.scen === 'par' ? 'D를 선택하고 빈 구획(초록) 앞차 옆까지 전진' : 'D를 선택하고 목표칸(초록)을 지나 전진', '', 3500);
+}
+function setScen(s){
+  S.scen = s; S.diff = 1;
+  $('#sc-par').setAttribute('aria-pressed', s === 'par'); $('#sc-t').setAttribute('aria-pressed', s === 't');
+  fillDiff(); resetAll();
+}
+$('#sc-par').onclick = () => setScen('par');
+$('#sc-t').onclick = () => setScen('t');
+$('#diff').onchange = e => { S.diff = +e.target.value; resetAll(); e.target.blur(); };
+$('#carSel').onchange = e => { S.car = e.target.value; resetAll(); e.target.blur(); };
+$('#reset').onclick = resetAll;
+
+fillDiff(); resetAll(); layout();
+let last = performance.now(), hudT = 0;
+function frame(t){
+  const dt = Math.min(0.05, (t - last)/1000); last = t;
+  step(dt); stepTraffic(dt); sync(dt); render();
+  hudT += dt; if(hudT > 0.1){ hud(); hudT = 0; }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+
+</body></html>
